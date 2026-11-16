@@ -14,6 +14,8 @@ vars:
   # forge's registry (petersweb-infra nixos/edge.nix), where iso.yml pushes.
   UPDATE_IMAGE: registry.quineglobal.com/quine-linux:latest
   OUTPUT_DIR: '{{.ROOT_DIR}}/output'
+  # bootc-image-builder's working store (build-disk-image), removed after.
+  BIB_STORE: '{{.ROOT_DIR}}/output/.bib-store'
   # Root is needed for the container builds and bootc; skip {{.SUDO}} when already
   # root (e.g. on a CI runner, which may not have {{.SUDO}} at all).
   SUDO:
@@ -99,12 +101,21 @@ tasks:
         {{if eq .CONTAINER_RUNTIME "podman"}}{{.SUDO}} podman tag localhost/{{.IMAGE}} {{.UPDATE_IMAGE}}{{else}}{{.SUDO}} {{.CONTAINER_RUNTIME}} run --rm --privileged
         -v {{.STORAGE}}:/var/lib/containers/storage {{.SKOPEO_IMAGE}}
         copy containers-storage:localhost/{{.IMAGE}}:latest containers-storage:{{.UPDATE_IMAGE}}{{end}}
-      - mkdir -p {{.OUTPUT_DIR}}
+      # The builder stages' images (untagged now that build-image is done):
+      # on the arm64 runner they share the 49 GB containers disk with
+      # everything below.
+      - '{{.SUDO}} {{.CONTAINER_RUNTIME}} image prune -f >/dev/null || true'
+      # osbuild's store (the raw disk and the qcow2 it converts it to, ~14 GB
+      # each) on the host's disk, not in bootc-image-builder's own container
+      # layer on the containers disk, which ran out (2026-11-16).
+      - mkdir -p {{.OUTPUT_DIR}} {{.BIB_STORE}}
+      - defer: '{{.SUDO}} rm -rf {{.BIB_STORE}}'
       # Root on btrfs, as Aurora installs it: disk/config.toml.
       - >-
         {{.SUDO}} {{.CONTAINER_RUNTIME}} run --rm --privileged {{.PULL_FLAG}}
         --security-opt label=type:unconfined_t
         -v {{.OUTPUT_DIR}}:/output
+        -v {{.BIB_STORE}}:/store
         -v {{.ROOT_DIR}}/disk/config.toml:/config.toml:ro
         -v {{.STORAGE}}:/var/lib/containers/storage
         {{.BIB_IMAGE}}
