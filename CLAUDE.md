@@ -15,7 +15,8 @@ other apps. This file is what you'd otherwise rediscover the hard way.
 - **Bleeding edge:** the Containerfile's `updated` stage upgrades Aurora to
   Fedora's latest (all but the kernel, which pairs with Universal Blue's
   prebuilt kmods) and rebuilds the initramfs; every other stage builds FROM
-  it. Newer than Aurora has tested is fine: fix what breaks.
+  it. Newer than Aurora has tested is fine: fix what breaks. Why, and the
+  stable alternative: [docs/UPSTREAM.md](docs/UPSTREAM.md).
 - **Published as** `forge.in.quineglobal.com/quine-global/quine-linux`
   (`latest`, `latest-arm64`, date and commit tags). Installed systems follow
   `registry.quineglobal.com/quine-linux:latest` (the same image, a pull-only

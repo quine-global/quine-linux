@@ -18,6 +18,7 @@ The image is built in two repos:
   what Aurora's `stable` has caught up to, and we fix what breaks. The
   kernel stays Aurora's, signed and paired with Universal Blue's prebuilt
   kernel modules; the initramfs is rebuilt from the upgraded packages.
+  Why, and what we'd do to be stable instead: [docs/UPSTREAM.md](docs/UPSTREAM.md).
   Then it layers in everything under `overlay/`, plus a
   `kmod-builder` stage that compiles the CS8409 mic-fix kernel module (see
   [Hardware-specific patches](#hardware-specific-patches) below). Anything a
