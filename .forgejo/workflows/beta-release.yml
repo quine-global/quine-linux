@@ -1,0 +1,39 @@
+name: Beta release
+
+# One click for the next beta: the same as Release with bump: prerelease,
+# pre: beta (.forgejo/release-tag.sh). From v0.1.2 that's v0.1.3-beta.1;
+# from v0.1.3-beta.1, v0.1.3-beta.2; from v0.1.3-alpha.2, v0.1.3-beta.1.
+# The tag push starts iso.yml, which builds both architectures and publishes
+# the Forgejo release (marked a prerelease, like every -label.N tag).
+#
+# Secret: RELEASE_TOKEN, as for Release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only say which tag it would make
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: runner-x86-linux
+    steps:
+      - uses: https://forge.in.quineglobal.com/quine-global/mirror-actions-checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Tag the next beta and push the tag
+        env:
+          BUMP: prerelease
+          PRE: beta
+          DRY_RUN: ${{ inputs.dry_run }}
+          HAS_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+        run: .forgejo/release-tag.sh

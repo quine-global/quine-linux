@@ -101,13 +101,18 @@ this repo.
 
 On the forge: **Actions → Release → Run workflow**. It works out the next
 version from the newest `v*` tag, tags `main` with it and pushes the tag.
+For the next beta there's a one-click **Actions → Beta release**: the same
+as `bump: prerelease`, `pre: beta` (`v0.1.2` → `v0.1.3-beta.1` →
+`v0.1.3-beta.2`). Both tag `main`'s newest commit that isn't marked
+`[skip ci]`, since Forgejo wouldn't build a tag on one (those commits don't
+change the image). The logic is `.forgejo/release-tag.sh`.
 The tag push makes `iso.yml` build both architectures, upload the files to
 `releases/<tag>/` and publish the Forgejo release. Choose `bump`:
 
 | `bump` | From `v0.1.0-alpha.2` | From `v0.1.0` |
 |---|---|---|
 | `prerelease` (with `pre`) | `v0.1.0-alpha.3`, or `v0.1.0-beta.1` with `pre: beta` | `v0.1.1-alpha.1` |
-| `release` | `v0.1.0` | an error (already released) |
+| `release` | `v0.1.0` | an error (already released: use `patch` with `pre: none`) |
 | `patch` / `minor` / `major` | `v0.1.1` / `v0.2.0` / `v1.0.0` | the same, plus `-<pre>.1` unless `pre: none` |
 
 `version` (e.g. `1.0.0`) sets the version exactly instead. `dry_run` only

@@ -53,7 +53,7 @@ other apps. This file is what you'd otherwise rediscover the hard way.
   not a tag build.
 - Put `[skip ci]` in a commit that can't change the image (docs, the VM
   test), or it costs a 3-hour build.
-- `release.yml`: tags `main` (README "Releasing"). `vm-test.yml`: boots an
+- `release.yml` / `beta-release.yml`: tag `main` (README "Releasing"). `vm-test.yml`: boots an
   ISO on zeus's VM 107 ([docs/VM_TEST.md](docs/VM_TEST.md)).
 - Build steps run under `retry-on-network-error.sh` (retries on dropped
   fetches and on 30 minutes of silence); base-image pulls have a 60-minute
