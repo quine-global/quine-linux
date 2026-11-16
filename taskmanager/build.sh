@@ -33,7 +33,17 @@ dnf install -y --setopt=install_weak_deps=False \
 
 work=$(mktemp -d)
 cd "$work"
-dnf download --source --enablerepo=fedora-source,updates-source,updates-archive "plasma-workspace-$nvr"
+# The source repos only carry each package's newest build, and the image can
+# be a build behind them (Aurora's stable lags Fedora's updates; there's no
+# source updates-archive), when dnf finds nothing and still exits 0. Koji
+# keeps every build's source RPM, over HTTPS from Fedora's own build system.
+srpm="plasma-workspace-$nvr.src.rpm"
+dnf download --source --enablerepo=fedora-source,updates-source "plasma-workspace-$nvr" || true
+if [ ! -s "$srpm" ]; then
+  url="https://kojipkgs.fedoraproject.org/packages/plasma-workspace/$V/${nvr#"$V"-}/src/$srpm"
+  echo "plasma-workspace-$nvr's source isn't in the repos any more; from Koji: $url"
+  curl -fsSL --retry 5 -o "$srpm" "$url"
+fi
 rpm2cpio "plasma-workspace-$nvr.src.rpm" | cpio -id --quiet
 tar -xJf "plasma-workspace-$V.tar.xz" \
   "plasma-workspace-$V/libtaskmanager" "plasma-workspace-$V/config-X11.h.cmake"
