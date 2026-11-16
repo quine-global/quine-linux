@@ -55,10 +55,16 @@ tasks:
       (our Aurora build from the forge's registry by default), as root
       (under podman this lands in root's containers-storage, which bootc and
       bootc-image-builder read; under docker, the ISO tasks copy it over).
+    vars:
+      # The Containerfile's `updated` stage upgrades to Fedora's latest; a
+      # new stamp each hour makes the layer cache redo it.
+      UPDATES_STAMP:
+        sh: date -u +%Y-%m-%dT%H
     cmds:
       - >-
         {{.SUDO}} {{.CONTAINER_RUNTIME}} build --platform {{.PLATFORM}}
         --build-arg BASE_IMAGE={{.BASE_IMAGE}}
+        --build-arg UPDATES_STAMP={{.UPDATES_STAMP}}
         -t {{.IMAGE}} -f Containerfile .
     sources:
       - Containerfile

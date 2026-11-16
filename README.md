@@ -13,7 +13,12 @@ The image is built in two repos:
   have to happen *inside* Aurora's build (its package set, build scripts,
   the Kinoite base it starts from) go there, as commits on the fork.
 - **This repo's `Containerfile`**, which builds the quine-linux bootc image
-  on top of that, layering in everything under `overlay/`, plus a
+  on top of that. It first upgrades Aurora to Fedora's latest packages (the
+  `updated` stage, every build): Quine Linux is bleeding edge, ahead of
+  what Aurora's `stable` has caught up to, and we fix what breaks. The
+  kernel stays Aurora's, signed and paired with Universal Blue's prebuilt
+  kernel modules; the initramfs is rebuilt from the upgraded packages.
+  Then it layers in everything under `overlay/`, plus a
   `kmod-builder` stage that compiles the CS8409 mic-fix kernel module (see
   [Hardware-specific patches](#hardware-specific-patches) below). Anything a
   `RUN` step on top of Aurora can do belongs here, not in the fork. Its

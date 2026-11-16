@@ -6,13 +6,34 @@
 # the fork.
 ARG BASE_IMAGE=forge.in.quineglobal.com/quine-global/aurora:stable
 
+# --- Aurora, upgraded to Fedora's latest packages. ---
+# Quine Linux is bleeding edge: it ships what Fedora has today, not only
+# what Aurora's stable has caught up to, and we fix what breaks. Every
+# stage below starts here, so the builders compile against exactly what
+# ships. The kernel stays Aurora's: it comes signed from Universal Blue's
+# akmods, paired with the prebuilt kernel modules installed with it.
+# UPDATES_STAMP (the Taskfile passes the hour) makes the layer cache redo
+# the upgrade instead of keeping the first one forever.
+FROM ${BASE_IMAGE} AS updated
+ARG UPDATES_STAMP=unset
+RUN set -eux; \
+    echo "Fedora updates as of ${UPDATES_STAMP}"; \
+    dnf upgrade -y --refresh --exclude='kernel*'; \
+    dnf clean all; \
+    # The initramfs holds copies of systemd and friends: rebuild it from the
+    # upgraded ones, the way Universal Blue's images build theirs.
+    KVER="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"; \
+    TMPDIR=/var/tmp dracut --no-hostonly --kver "$KVER" --reproducible --zstd \
+        --add ostree -f "/usr/lib/modules/$KVER/initramfs.img"; \
+    chmod 0600 "/usr/lib/modules/$KVER/initramfs.img"
+
 # --- Builds the out-of-tree snd-hda-codec-cs8409 module (iMac19,2 mic fix). ---
 # See docs/imac19-2-mic-fix.md and patches/snd-hda-codec-cs8409/ for the full
 # story. Kept as its own stage so the build toolchain never lands in the
-# final image, and built FROM the same BASE_IMAGE as the final stage so the
+# final image, and built FROM the same `updated` stage as the final one so the
 # kernel-devel headers installed here can never drift out of sync with the
 # kernel that actually ships below.
-FROM ${BASE_IMAGE} AS kmod-builder
+FROM updated AS kmod-builder
 
 RUN set -eux; \
     NVR="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"; \
@@ -42,11 +63,11 @@ RUN set -eux; \
 # just that plugin from our fork, quine-global/plasma-desktop, branch
 # quine-v<version>: KDE's release of the plasma-desktop version the image
 # ships, plus our commits. The final stage puts it in place of the stock
-# one. Like kmod-builder, it's built FROM BASE_IMAGE so it can't drift from
+# one. Like kmod-builder, it's built FROM `updated` so it can't drift from
 # the Plasma it runs on; the -devel packages are pinned to the installed
 # versions (older ones come from Fedora's updates-archive). kickoff/ holds
 # the CMakeLists.txt that builds the applet outside plasma-desktop's tree.
-FROM ${BASE_IMAGE} AS kickoff-builder
+FROM updated AS kickoff-builder
 
 COPY kickoff/CMakeLists.txt /tmp/kickoff/
 
@@ -78,13 +99,13 @@ RUN set -eux; \
 # feedback (README, "Launch feedback"). taskmanager/build.sh: Fedora's own
 # source of the plasma-workspace the image ships, plus
 # taskmanager/startup-feedback.patch, -devel pinned like kickoff-builder's.
-FROM ${BASE_IMAGE} AS taskmanager-builder
+FROM updated AS taskmanager-builder
 
 COPY taskmanager/ /tmp/taskmanager/
 RUN /tmp/taskmanager/build.sh
 
 # --- Final image. ---
-FROM ${BASE_IMAGE} AS final
+FROM updated AS final
 
 COPY overlay/ /
 

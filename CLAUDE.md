@@ -12,6 +12,10 @@ other apps. This file is what you'd otherwise rediscover the hard way.
   published as `forge.in.quineglobal.com/quine-global/aurora:stable`
   and `:stable-arm64`) for changes *inside* Aurora's build; this repo's
   `Containerfile` for everything a `RUN` on top can do. Prefer this repo.
+- **Bleeding edge:** the Containerfile's `updated` stage upgrades Aurora to
+  Fedora's latest (all but the kernel, which pairs with Universal Blue's
+  prebuilt kmods) and rebuilds the initramfs; every other stage builds FROM
+  it. Newer than Aurora has tested is fine: fix what breaks.
 - **Published as** `forge.in.quineglobal.com/quine-global/quine-linux`
   (`latest`, `latest-arm64`, date and commit tags). Installed systems follow
   `registry.quineglobal.com/quine-linux:latest` (the same image, a pull-only

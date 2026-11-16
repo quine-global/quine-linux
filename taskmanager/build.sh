@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds libtaskmanager (plasma-workspace's task manager models) with
 # startup-feedback.patch, into /out/usr/lib64, for the Containerfile's
-# taskmanager-builder (README: "Launch feedback"). Runs FROM BASE_IMAGE:
+# taskmanager-builder (README: "Launch feedback"). Runs FROM the `updated` stage:
 # the source is Fedora's own source RPM of the plasma-workspace the image
 # ships (its two patches don't touch libtaskmanager), and the -devel
 # packages are pinned to the installed versions, so the library can't
