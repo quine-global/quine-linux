@@ -19,7 +19,13 @@ ARG UPDATES_STAMP=unset
 RUN set -eux; \
     echo "Fedora updates as of ${UPDATES_STAMP}"; \
     dnf upgrade -y --refresh --exclude='kernel*'; \
-    dnf clean all; \
+    # The repo metadata stays (the final stage drops it at its end): every
+    # stage below resolves against this same snapshot of the repos, still
+    # fresh for the whole build (Fedora's repo files: 6h for updates). Each
+    # fetching its own came from different mirrors, and a mirror that hadn't
+    # caught up with an update pushed that morning lacked the -devel
+    # packages for what this stage had installed (2026-11-16).
+    dnf clean packages; \
     # The initramfs holds copies of systemd and friends: rebuild it from the
     # upgraded ones, the way Universal Blue's images build theirs.
     KVER="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"; \
@@ -207,3 +213,7 @@ RUN systemctl --global enable disk-cleanup.timer ssh-agent.socket gpg-agent.sock
     test -L /etc/systemd/user/sockets.target.wants/gpg-agent.socket && \
     test ! -e /etc/systemd/user/sockets.target.wants/gpg-agent-ssh.socket && \
     test ! -e /usr/lib/systemd/user/sockets.target.wants/gpg-agent-ssh.socket
+
+# Last: the repo metadata the `updated` stage kept for the build's stages,
+# and anything since. Not part of the system.
+RUN dnf clean all && rm -rf /var/cache/libdnf5
