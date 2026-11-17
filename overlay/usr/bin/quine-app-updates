@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/lib/quine-linux/python/bin/python3
 """Flatpak apps update when they're opened (README "App updates on launch").
 
   quine-app-updates launch APP_ID -- COMMAND...

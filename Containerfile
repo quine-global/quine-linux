@@ -110,6 +110,26 @@ FROM updated AS taskmanager-builder
 COPY taskmanager/ /tmp/taskmanager/
 RUN /tmp/taskmanager/build.sh
 
+# --- Python packages for our scripts (quine-app-updates), with uv. ---
+# python/pyproject.toml lists them and python/uv.lock pins each version and
+# its sdist's hash (`uv sync --frozen` refuses anything else). They go into
+# a venv on the system's python3 at /usr/lib/quine-linux/python, which the
+# scripts' shebangs name, so they don't depend on which python3-* RPMs the
+# base happens to ship. Built FROM `updated`: compiled against the Python and
+# GLib that ship. PyGObject and pycairo have no Linux wheels on PyPI, hence
+# the compiler and -devel packages, which stay in this stage.
+FROM updated AS python-builder
+
+RUN dnf install -y --setopt=install_weak_deps=False uv gcc pkgconf-pkg-config \
+      python3-devel gobject-introspection-devel cairo-devel cairo-gobject-devel
+
+COPY python/pyproject.toml python/uv.lock /src/
+
+RUN cd /src && \
+    UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 UV_CACHE_DIR=/tmp/uv-cache \
+    UV_PROJECT_ENVIRONMENT=/usr/lib/quine-linux/python \
+      uv sync --frozen --no-dev --python /usr/bin/python3
+
 # --- Final image. ---
 FROM updated AS final
 
@@ -123,10 +143,12 @@ RUN dnf install -y alsa-tools
 # Kinoite; this makes sure.
 RUN dnf install -y kdialog
 
-# python3-gobject-base: GLib's key file parser, which quine-app-updates reads
-# and writes Flatpak apps' menu entries with. Already in Fedora's base; this
-# makes sure.
-RUN dnf install -y python3-gobject-base
+# The venv quine-app-updates runs on (python-builder, above): PyGObject, for
+# GLib's key file parser, which it reads and writes Flatpak apps' menu
+# entries with. The check makes sure gi comes from the venv.
+COPY --from=python-builder /usr/lib/quine-linux/python/ /usr/lib/quine-linux/python/
+RUN /usr/lib/quine-linux/python/bin/python3 -c \
+      'import gi; from gi.repository import GLib; assert gi.__file__.startswith("/usr/lib/quine-linux/python/"), gi.__file__; print("PyGObject", gi.__version__, "from", gi.__file__)'
 
 # calligra-words, tailscale, teamviewer: NOT baked in here -- layer-wizard
 # (already installed below) ships them as built-in recipes instead, so

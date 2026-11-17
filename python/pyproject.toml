@@ -1,0 +1,16 @@
+# Python packages for the image's own scripts (overlay/usr/bin/quine-app-updates),
+# installed with uv from uv.lock into /usr/lib/quine-linux/python, a venv on
+# the system's python3 (the Containerfile's python-builder stage). Not a
+# package itself. After changing the dependencies: `uv lock` here, and commit
+# uv.lock; `uv lock --upgrade` for newer versions.
+[project]
+name = "quine-linux-scripts"
+version = "0"
+requires-python = ">=3.13"
+dependencies = [
+    # GLib's key file parser, for Flatpak apps' menu entries.
+    "pygobject",
+]
+
+[tool.uv]
+package = false

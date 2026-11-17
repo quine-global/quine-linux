@@ -303,7 +303,9 @@ A Flatpak app updates when it's opened, not on a schedule: opening it checks
 its repo, and if there's a newer version, a small "Updating <App>…" window
 (with **Skip**) installs it before the app starts. It doesn't depend on the
 system's own update (uupd) and nothing runs in the background. All of it is
-`overlay/usr/bin/quine-app-updates`.
+`overlay/usr/bin/quine-app-updates`. It runs on its own venv,
+`/usr/lib/quine-linux/python`, with PyGObject installed by uv from
+`python/uv.lock` (`python/pyproject.toml` says how to change it).
 
 - **How launches go through it.** Flatpak exports each app's menu entry
   (`/var/lib/flatpak/exports/share/applications`, and
