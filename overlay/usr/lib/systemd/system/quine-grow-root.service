@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the root filesystem to fill its disk
+Documentation=file:///usr/libexec/quine-linux/grow-root
+After=local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/quine-linux/grow-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

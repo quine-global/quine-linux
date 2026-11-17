@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Grows the root partition and its btrfs to the end of the disk, when the
+# disk is bigger than its partition table says: the disk image (qcow2,
+# disk/config.toml, 24 GiB) written to a bigger disk or stick, or a VM's
+# disk enlarged (qemu-img resize). Run at every boot by
+# quine-grow-root.service; after growing, the partition table ends at the
+# end of the disk and it does nothing.
+#
+# Anaconda installs aren't touched: their partition table already ends at
+# the end of the disk, so space someone left free on purpose stays free.
+# The live ISO has no /sysroot, so nothing happens there either.
+set -euo pipefail
+
+ROOT_MOUNT=${ROOT_MOUNT:-/sysroot}   # ostree mounts the real root there
+
+src=$(findmnt -no SOURCE "$ROOT_MOUNT" 2>/dev/null) || exit 0
+src=${src%%\[*}   # btrfs: /dev/vda4[/root] -> /dev/vda4
+[ "$(findmnt -no FSTYPE "$ROOT_MOUNT")" = btrfs ] || exit 0
+
+part=$(basename "$(realpath "$src")")
+[ -e "/sys/class/block/$part/partition" ] || exit 0   # not on a partition
+disk=$(basename "$(realpath "/sys/class/block/$part/..")")
+partnum=$(cat "/sys/class/block/$part/partition")
+dev=/dev/$disk
+
+# Only GPT, and only when the table's last usable sector is well short of
+# the disk's end (more than 1 MiB): the disk grew under it.
+[ "$(sfdisk --dump "$dev" | awk '/^label:/{print $2}')" = gpt ] || exit 0
+ss=$(blockdev --getss "$dev")
+disk_lbas=$(( $(cat "/sys/class/block/$disk/size") * 512 / ss ))
+last_lba=$(sfdisk --dump "$dev" | awk '/^last-lba:/{print $2}')
+gap=$(( disk_lbas - 1 - last_lba ))
+if [ "$gap" -le $(( 1048576 / ss )) ]; then
+  exit 0
+fi
+
+echo "grow-root: $dev is $(( gap * ss / 1048576 )) MiB bigger than its partition table; growing partition $partnum ($src) and its btrfs"
+# The backup GPT to the disk's real end, then the partition (growpart
+# grows it up to the next partition or the end, and tells the kernel).
+sfdisk --relocate gpt-bak-std "$dev"
+rc=0; growpart "$dev" "$partnum" || rc=$?
+[ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"   # 1: NOCHANGE, nothing after it to grow into
+udevadm settle || true
+
+# The filesystem, through a writable mount of its top level (/sysroot
+# itself is read-only).
+tmp=$(mktemp -d /run/grow-root.XXXXXX)
+mount -o subvolid=5 "$src" "$tmp"
+trap 'umount "$tmp"; rmdir "$tmp"' EXIT
+btrfs filesystem resize max "$tmp"
+btrfs filesystem show "$tmp" | grep devid

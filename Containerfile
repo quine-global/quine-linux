@@ -143,6 +143,11 @@ RUN dnf install -y alsa-tools
 # Kinoite; this makes sure.
 RUN dnf install -y kdialog
 
+# cloud-utils-growpart: growpart, which grow-root
+# (quine-grow-root.service) grows the root partition with when the disk
+# image is written to a bigger disk.
+RUN dnf install -y cloud-utils-growpart
+
 # The venv quine-app-updates runs on (python-builder, above): PyGObject, for
 # GLib's key file parser, which it reads and writes Flatpak apps' menu
 # entries with. The check makes sure gi comes from the venv.
@@ -221,9 +226,11 @@ COPY --from=taskmanager-builder /out/usr/lib64/ /usr/lib64/
 # quine-app-launchers.{path,service}: Flatpak apps' menu entries open through
 # quine-app-updates, which updates an app as it opens (README "App updates on
 # launch").
+# quine-grow-root.service: the root fills its disk when the disk image was
+# written to a bigger one (overlay/usr/libexec/quine-linux/grow-root).
 RUN systemctl enable rpm-ostree-cleanup.timer cs8409-intmike-power-fixup.service \
       quine-update-check.timer quine-data-disk-relabel.service \
-      quine-app-launchers.path quine-app-launchers.service
+      quine-app-launchers.path quine-app-launchers.service quine-grow-root.service
 
 # User units, for every user (links in /etc/systemd/user/). A preset file
 # alone doesn't do it: nothing runs `systemctl --global preset` for files

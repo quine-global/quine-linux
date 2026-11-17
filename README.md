@@ -45,7 +45,12 @@ list what's available. Notably:
   `quine-containers-storage` volume for `bootc-image-builder` to read.
 - `task build-disk-image` — builds a ready-installed disk image (qcow2)
   via `bootc-image-builder`, landing in `output/qcow2/disk.qcow2`. It has
-  no user: plasma-setup creates the first one at first boot.
+  no user: plasma-setup creates the first one at first boot. It's a 24 GiB
+  disk (`disk/config.toml`), so it fits a 32 GB stick; written to a bigger
+  disk (`qemu-img convert -O raw … /dev/…`), or a VM's disk enlarged
+  (`qemu-img resize`), the root grows to fill it at the next boot
+  (`quine-grow-root.service`, `overlay/usr/libexec/quine-linux/grow-root`).
+  Installs from the live ISO aren't touched.
 - `task build-live-iso` — builds a live ISO (`live/`, after Aurora's):
   boots into a Quine Linux session with Anaconda WebUI to install it,
   landing in `output/live/Quine-Linux-Live.iso`. Podman only.
