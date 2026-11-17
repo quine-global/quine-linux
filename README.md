@@ -309,7 +309,8 @@ system's own update (uupd) and nothing runs in the background. All of it is
   (`/var/lib/flatpak/exports/share/applications`, and
   `~/.local/share/flatpak/exports/…` for the user's own installation).
   `quine-app-launchers.path` notices apps being installed or removed and
-  `quine-app-updates sync-launchers` writes a copy of each entry with
+  `quine-app-updates sync-launchers` parses each entry (GLib's key file
+  parser, as GIO reads them) and writes a copy with
   `Exec=quine-app-updates launch <app id> -- <the original flatpak run …>`
   (and `DBusActivatable=false`, which would skip the Exec line) into
   `/var/lib/quine-linux/app-launchers` and

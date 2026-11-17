@@ -123,6 +123,11 @@ RUN dnf install -y alsa-tools
 # Kinoite; this makes sure.
 RUN dnf install -y kdialog
 
+# python3-gobject-base: GLib's key file parser, which quine-app-updates reads
+# and writes Flatpak apps' menu entries with. Already in Fedora's base; this
+# makes sure.
+RUN dnf install -y python3-gobject-base
+
 # calligra-words, tailscale, teamviewer: NOT baked in here -- layer-wizard
 # (already installed below) ships them as built-in recipes instead, so
 # they're install-on-demand per machine rather than forced onto every
