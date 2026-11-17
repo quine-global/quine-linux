@@ -144,6 +144,10 @@ rm -f /usr/share/plasma/plasma-welcome/intro-customization.desktop
 sed -i 's/ANACONDA_PRODUCTVERSION=.*/ANACONDA_PRODUCTVERSION=""/' /usr/{,s}bin/liveinst || true
 
 # The profile matches os-release's ID (Aurora's, which quine-linux keeps).
+# webui_web_engine: the browser Anaconda's web UI opens in. Its launcher
+# (/usr/libexec/anaconda/webui-desktop) runs the value as a command, so
+# slitherer (Fedora's Qt WebEngine browser for the installer) gets
+# --windowed: an ordinary window on the live desktop, not full screen.
 mkdir -p /etc/anaconda/profile.d
 tee /etc/anaconda/profile.d/quine-linux.conf <<EOF
 [Profile]
@@ -168,7 +172,7 @@ default_partitioning =
     /var  (btrfs)
 
 [User Interface]
-webui_web_engine = slitherer
+webui_web_engine = slitherer --windowed
 hidden_spokes =
     NetworkSpoke
     PasswordSpoke
