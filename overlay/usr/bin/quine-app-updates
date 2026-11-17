@@ -46,6 +46,13 @@ LAUNCHERS = {
 }
 SELF = "/usr/bin/quine-app-updates"
 
+# Apps shown under another name in the menu (and KRunner, the task manager):
+# only the entry's Name changes, in every language; the app itself, its ID
+# and its own windows keep theirs.
+RENAMES = {
+    "io.github.kolunmi.Bazaar": "Central Package",
+}
+
 # Sandbox permissions live in these metadata groups; anything an update adds
 # to them is asked about first.
 PERMISSION_GROUPS = ("Context", "Session Bus Policy", "System Bus Policy")
@@ -239,14 +246,23 @@ def launch(args):
 
 
 def rewrite(desktop_file):
-    """The entry with each `flatpak run` going through `launch`, or None."""
+    """The entry with each `flatpak run` going through `launch`, and the
+    name from RENAMES, or None."""
     lines = desktop_file.read_text().splitlines()
     app_id = next((line.split("=", 1)[1].strip() for line in lines if line.startswith("X-Flatpak=")), None)
     if not app_id:
         return None
+    rename = RENAMES.get(app_id)
     out = []
+    group = None
     for line in lines:
-        if line.startswith("Exec=") and "flatpak run" in line and SELF not in line:
+        if line.startswith("["):
+            group = line.strip()
+        if rename and group == "[Desktop Entry]" and line.startswith(("Name=", "Name[")):
+            if line.startswith("Name["):
+                continue  # translations of the old name
+            line = f"Name={rename}"
+        elif line.startswith("Exec=") and "flatpak run" in line and SELF not in line:
             line = f"Exec={SELF} launch {app_id} -- {line[5:]}"
         elif line.startswith("DBusActivatable="):
             # D-Bus activation would start the app without its Exec line.

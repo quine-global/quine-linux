@@ -317,6 +317,11 @@ system's own update (uupd) and nothing runs in the background. All of it is
   `XDG_DATA_DIRS` (`/usr/lib/systemd/user-environment-generators/61-quine-app-launchers`,
   `/etc/profile.d/quine-app-launchers.sh`), so the menu, KRunner and pinned
   launchers use them. `flatpak run` typed in a terminal goes around it.
+- **Renamed apps.** The same copies give some apps another name in the
+  menu (`RENAMES` in the script): Bazaar shows as **Central Package**.
+  Only the menu entry's `Name` changes (its translations dropped); the
+  app's own windows and the Kickoff search row "Install … from Bazaar"
+  keep the old name.
 - **On launch:** if the app is already running, nothing. Otherwise one
   `flatpak remote-info` against its remote, at most 4 seconds: no newer
   commit, offline, or slow, and the installed version opens at once.
