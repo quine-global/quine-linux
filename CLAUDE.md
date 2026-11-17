@@ -83,7 +83,7 @@ other apps. This file is what you'd otherwise rediscover the hard way.
 
 - On a Quine Linux machine: `task test:stage` / `task test:boot`, and
   `task revert` to undo.
-- On a VM: Actions → **VM test** (or `task test:vm TAG=…`) puts an ISO on
+- On a VM: Actions → **VM test** (or `task vm`, newest build; `TAG=…` a release) puts an ISO on
   zeus's VM 107 and waits for its guest agent. VM 107 has a second 100 GB
   disk with an ext4 partition labelled `data`, for the Data disk step. To
   look at the screen: on zeus, `vmvnc 107 capture /tmp/x.png`.

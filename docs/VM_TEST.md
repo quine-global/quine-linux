@@ -7,9 +7,13 @@ nothing else.
 
 - **From Forgejo:** Actions → **VM test** → Run workflow, with a release tag
   (`v0.1.1-alpha.1`) or `latest` (the last build of `main`).
-- **From a laptop on the tailnet:** `PVE_TOKEN=… task test:vm TAG=v0.1.1-alpha.1`.
-  `TAG=latest` also needs MinIO's credentials in `RCLONE_CONFIG_STORE_*`, as
-  in `iso.yml`, or an `ISO_URL`.
+- **From a laptop on the tailnet:** `task vm` (short for `task test:vm`)
+  puts the newest build on it; `task vm TAG=v0.1.2` a release. No secrets
+  to set: without `PVE_TOKEN` the script makes the same calls as `pvesh`
+  over root SSH to zeus (`PVE_SSH`), and for `latest` it reads
+  quine-linux's own MinIO keys over SSH from the forge VM (`MINIO_SSH`),
+  unless `RCLONE_CONFIG_STORE_*` (as in `iso.yml`) or `ISO_URL` is set.
+  rclone comes from nixpkgs if it isn't installed.
 
 ## What it does
 

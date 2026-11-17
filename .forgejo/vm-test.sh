@@ -4,8 +4,9 @@
 # tag (v0.1.1-alpha.1: its public ISO, checked against its SHA256SUMS) or
 # `latest` (the last build of main, from MinIO through a presigned link).
 #
-# Through Proxmox's API only, with an API token that can do no more than
-# this (docs/VM_TEST.md):
+# Through Proxmox's API only: with an API token that can do no more than
+# this (docs/VM_TEST.md), or, with no token (from a laptop on the tailnet),
+# the same calls as `pvesh` over root SSH to zeus:
 #   1. stop the VM, detach the ISO, replace it with TAG's (Proxmox
 #      downloads it straight from MinIO), attach it, enable the QEMU guest
 #      agent's channel, start the VM. The VM must already boot from its CD
@@ -16,16 +17,22 @@
 # The VM is left running, at the live desktop, for a look in its console.
 #
 # Environment:
-#   PVE_TOKEN    required: `user@realm!tokenid=secret`
+#   PVE_TOKEN    `user@realm!tokenid=secret`; unset: over SSH to PVE_SSH
+#   PVE_SSH      default root@zeus.ts.quineglobal.com
 #   PVE_URL      default https://proxmox.in.coldairnetworks.com (tailnet)
 #   PVE_NODE     default zeus;  VMID default 107;  PVE_STORAGE default local
 #   ISO_URL      instead of working it out from TAG
 #   BOOT_TIMEOUT seconds to wait for the guest agent, default 900
-#   For TAG=latest: RCLONE_CONFIG_STORE_* (as iso.yml) and MINIO_BUCKET
+#   For TAG=latest: RCLONE_CONFIG_STORE_* (as iso.yml) and MINIO_BUCKET;
+#                unset: quine-linux's own MinIO keys, read over SSH from
+#                the forge VM (MINIO_SSH, default
+#                root@mainframe-vm.ts.quineglobal.com). rclone comes from
+#                nixpkgs when it isn't installed.
 set -euo pipefail
 
 tag=${1:-${TAG:-latest}}
-: "${PVE_TOKEN:?PVE_TOKEN is not set: a Proxmox API token, user@realm!tokenid=secret (docs/VM_TEST.md)}"
+pve_token=${PVE_TOKEN:-}
+pve_ssh=${PVE_SSH:-root@zeus.ts.quineglobal.com}
 pve=${PVE_URL:-https://proxmox.in.coldairnetworks.com}/api2/json
 node=${PVE_NODE:-zeus}
 vmid=${VMID:-107}
@@ -36,9 +43,13 @@ bucket=${MINIO_BUCKET:-quine-linux}
 public=https://s3.quineglobal.com/$bucket
 
 log() { echo "== $*" >&2; }
-api() { # METHOD PATH [curl args...]: the response's .data; fails, saying why, on an error
+api() { # METHOD PATH [--data-urlencode k=v...]: the response's .data; fails, saying why, on an error
   local method=$1 path=$2 out code
   shift 2
+  if [ -z "$pve_token" ]; then
+    api_ssh "$method" "$path" "$@"
+    return
+  fi
   out=$(curl -sS -w '\n%{http_code}' -X "$method" -H "Authorization: PVEAPIToken=$PVE_TOKEN" "$pve$path" "$@") || return 1
   code=${out##*$'\n'}
   out=${out%$'\n'*}
@@ -48,11 +59,34 @@ api() { # METHOD PATH [curl args...]: the response's .data; fails, saying why, o
   fi
   jq -c '.data' <<<"$out"
 }
+# The same call as pvesh on zeus, over SSH, as root (no token needed).
+api_ssh() {
+  local method=$1 path=$2 cmd kv out
+  shift 2
+  case $method in GET) cmd=get ;; POST) cmd=create ;; PUT) cmd=set ;; DELETE) cmd=delete ;; esac
+  local args=()
+  while [ $# -gt 0 ]; do
+    [ "$1" = --data-urlencode ] || { echo "api_ssh: unexpected argument $1" >&2; return 1; }
+    kv=$2
+    args+=("--${kv%%=*}" "${kv#*=}")
+    shift 2
+  done
+  out=$(ssh -o BatchMode=yes "$pve_ssh" "$(printf '%q ' pvesh "$cmd" "$path" ${args[@]+"${args[@]}"} --output-format json)") || {
+    echo "Proxmox (ssh $pve_ssh): $method $path failed" >&2
+    return 1
+  }
+  # pvesh can print a line of its own first ("update VM 107: ..."); the
+  # result, if any, is the last line that's JSON.
+  out=$(grep -E '^[[{"]|^null$|^-?[0-9]' <<<"$out" | tail -n 1 || true)
+  if [ -n "$out" ]; then jq -c . <<<"$out"; else echo null; fi
+}
 # Waits for a Proxmox task (UPID) and fails if it did.
 wait_task() {
-  local upid=$1 status
+  local upid=$1 status path
+  path=$upid
+  [ -z "$pve_token" ] || path=$(jq -rn --arg u "$upid" '$u|@uri')
   while :; do
-    status=$(api GET "/nodes/$node/tasks/$(jq -rn --arg u "$upid" '$u|@uri')/status")
+    status=$(api GET "/nodes/$node/tasks/$path/status")
     [ "$(jq -r .status <<<"$status")" = stopped ] && break
     sleep 3
   done
@@ -67,7 +101,18 @@ checksum=
 if [ -n "${ISO_URL:-}" ]; then
   url=$ISO_URL
 elif [ "$tag" = latest ]; then
-  command -v rclone >/dev/null || { echo "::error::TAG=latest needs rclone and MinIO's credentials (or set ISO_URL)" >&2; exit 1; }
+  command -v rclone >/dev/null || rclone() { nix run nixpkgs#rclone -- "$@"; }
+  if [ -z "${RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY:-}" ]; then
+    minio_ssh=${MINIO_SSH:-root@mainframe-vm.ts.quineglobal.com}
+    log "reading quine-linux's MinIO keys from $minio_ssh"
+    creds=$(ssh -o BatchMode=yes "$minio_ssh" cat /run/agenix/minio-quine-linux)
+    export RCLONE_CONFIG_STORE_TYPE=s3 RCLONE_CONFIG_STORE_PROVIDER=Minio
+    export RCLONE_CONFIG_STORE_ENDPOINT=${RCLONE_CONFIG_STORE_ENDPOINT:-https://s3.quineglobal.com}
+    RCLONE_CONFIG_STORE_ACCESS_KEY_ID=$(sed -n 's/^AWS_ACCESS_KEY_ID=//p' <<<"$creds")
+    RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY=$(sed -n 's/^AWS_SECRET_ACCESS_KEY=//p' <<<"$creds")
+    export RCLONE_CONFIG_STORE_ACCESS_KEY_ID RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY
+    unset creds
+  fi
   url=$(rclone link --expire 3h "store:$bucket/live/latest/live.iso")
 else
   name=quine-linux-$tag-live-x86_64.iso

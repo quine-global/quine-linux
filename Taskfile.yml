@@ -217,12 +217,14 @@ tasks:
       - '{{.SUDO}} systemctl reboot'
 
   test:vm:
+    aliases: [vm]
     desc: >-
-      Boot a live ISO on zeus's test VM (107) through Proxmox's API and wait
-      for it to come up (.forgejo/vm-test.sh, docs/VM_TEST.md). TAG is a
-      release tag or `latest` (default; needs MinIO's credentials, or set
-      ISO_URL). Needs PVE_TOKEN. The VM stays up at the live desktop.
-      Example: PVE_TOKEN=... task test:vm TAG=v0.1.1-alpha.1
+      Put the newest build (or TAG, a release tag) on zeus's test VM (107),
+      boot it and wait for it to come up (.forgejo/vm-test.sh,
+      docs/VM_TEST.md). From a laptop on the tailnet it needs nothing but
+      root SSH to zeus and the forge VM; CI uses PVE_TOKEN and MinIO's
+      secrets instead. The VM stays up at the live desktop.
+      Examples: task test:vm; task test:vm TAG=v0.1.2
     vars:
       TAG: '{{.TAG | default "latest"}}'
     cmds:
