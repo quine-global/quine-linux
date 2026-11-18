@@ -33,6 +33,8 @@ outside download comes from one of these.
 | Hyper, Windows | the installer from GitHub releases | Hyper's own updater, against `hyper.quineglobal.com/update` |
 | Quintodrome, macOS | Homebrew cask `quintodrome` or the zip | Sparkle, from the tap's `quintodrome-*.xml` appcasts; downloads from the forge's public release path |
 | KeyMaker | `flatpak.quineglobal.com` (preinstalled) | When opened, like every Flatpak |
+| Quple, Linux | `flatpak.quineglobal.com` (preinstalled), `com.quineglobal.Quple`, built by quine-global/quple's `flatpak.yml` | When opened, like every Flatpak |
+| Quple, macOS | Homebrew cask `quple` or the dmg | Sparkle, from the tap's `quple-*.xml` appcasts |
 
 ## Signing keys (public halves)
 
