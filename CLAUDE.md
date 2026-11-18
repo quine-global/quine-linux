@@ -42,8 +42,9 @@ other apps. This file is what you'd otherwise rediscover the hard way.
   "Administrator prompts"). A new version that moves the code stops the build.
 - **Our apps** (layer-wizard, dnf-package-store, swap-watchdog) come from the
   forge's `quine` RPM group, built by each app's own CI; a fix to one reaches
-  the image on the next build. KeyMaker comes as a Flatpak from our repo,
-  flatpak.quineglobal.com.
+  the image on the next build. KeyMaker and Quple come as Flatpaks from our
+  repo, flatpak.quineglobal.com: their CI upload builds, and
+  quine-global/flatpak-repo alone publishes them (docs/DISTRIBUTION.md).
 - **Python packages for our scripts** (PyGObject, for quine-app-updates):
   uv, from `python/uv.lock`, into a venv at `/usr/lib/quine-linux/python`
   (the Containerfile's `python-builder` stage), not python3-* RPMs. Change

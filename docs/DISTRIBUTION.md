@@ -32,8 +32,8 @@ outside download comes from one of these.
 | Hyper, Linux | `packages.quineglobal.com` (apt/dnf), the AppImage, or the Homebrew cask | The package manager; Hyper's notification shows the command (`app/utils/linux-install.ts` in Hyper). Planned: the Quine Flatpak repo, so `quine-app-updates` covers it |
 | Hyper, Windows | the installer from GitHub releases | Hyper's own updater, against `hyper.quineglobal.com/update` |
 | Quintodrome, macOS | Homebrew cask `quintodrome` or the zip | Sparkle, from the tap's `quintodrome-*.xml` appcasts; downloads from the forge's public release path |
-| KeyMaker | `flatpak.quineglobal.com` (preinstalled) | When opened, like every Flatpak |
-| Quple, Linux | `flatpak.quineglobal.com` (preinstalled), `com.quineglobal.Quple`, built by quine-global/quple's `flatpak.yml` | When opened, like every Flatpak |
+| KeyMaker | `flatpak.quineglobal.com` (preinstalled), built by quine-global/keymaker's `flatpak.yml` | When opened, like every Flatpak |
+| Quple, Linux | `flatpak.quineglobal.com` (preinstalled), `com.quineglobal.Quple`, built by quine-global/quple's `flatpak.yml`; calls open in the browser | When opened, like every Flatpak |
 | Quple, macOS | Homebrew cask `quple` or the dmg | Sparkle, from the tap's `quple-*.xml` appcasts |
 
 ## Signing keys (public halves)
@@ -48,14 +48,19 @@ outside download comes from one of these.
 
 ## Publishing to the Flatpak repo
 
-An app's CI builds its Flatpak and adds it to the repo: KeyMaker's
-`.forgejo/workflows/flatpak.yml` and `.forgejo/flatpak-publish.sh` (in a
-privileged Fedora container, since flatpak-builder needs bubblewrap; once per
-architecture). Each run downloads the whole repo from S3, adds the build,
-signs it and uploads it again, so two apps publishing at the same moment
-could lose one's upload: the `quine-flatpak-repo` concurrency group only
-covers runs of the same workflow. With more apps, a single publisher that
-takes each app's `.flatpak` and imports them one at a time should replace it.
+Apps' CI only build: each builds its Flatpak (in a privileged Fedora
+container, since flatpak-builder needs bubblewrap; once per architecture)
+and uploads a bundle to the bucket's
+`flatpak/incoming/<app id>/<arch>/<UTC time>-<commit>.flatpak`
+(KeyMaker's and Quple's `.forgejo/workflows/flatpak.yml` and
+`.forgejo/flatpak-*.sh`). They need only the MinIO keys.
+
+**quine-global/flatpak-repo** publishes: its workflow runs every 10 minutes
+(seconds, with nothing waiting), imports the newest bundle of each app and
+architecture, signs it into the repo, uploads the repo and clears what it
+imported. It's the only thing that writes the repo, one run at a time, and
+the only one with the signing key (`FLATPAK_GPG_KEY_B64`). Its README says
+how to add an app.
 
 An app opts out of updating on launch with
 `flatpak build-finish --metadata=X-Quine=UpdateOnLaunch=false`.
