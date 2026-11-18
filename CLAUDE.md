@@ -35,6 +35,11 @@ other apps. This file is what you'd otherwise rediscover the hard way.
   follows the app's systemd unit (README "Launch feedback"). `taskmanager/
   build.sh` takes Fedora's source RPM of the installed version; if a new
   Plasma moves the code, the patch stops applying and the build says so.
+- **Administrator prompts** (polkit-qt6-1, polkit-kde, kio-admin) are Fedora's
+  packages rebuilt with `admin-auth/*.patch` (`admin-auth/build.sh`: the
+  installed version's source RPM and spec, release `.quine`), so requests
+  queue instead of failing while a password dialog is open (README
+  "Administrator prompts"). A new version that moves the code stops the build.
 - **Our apps** (layer-wizard, dnf-package-store, swap-watchdog) come from the
   forge's `quine` RPM group, built by each app's own CI; a fix to one reaches
   the image on the next build. KeyMaker comes as a Flatpak from our repo,

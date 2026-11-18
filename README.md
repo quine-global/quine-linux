@@ -299,6 +299,36 @@ The 3 minutes is `StillStartingTimeout` in `~/.config/klaunchrc`,
 `[TaskbarButtonSettings]`, in seconds. Wayland only (X11 is unchanged).
 The busy cursor still stops after its own timeout, as KWin draws it.
 
+## Administrator prompts
+
+Stock Plasma's password dialog (polkit's KDE agent) handles one request at a
+time and turns down every other one while a dialog is open, with nothing on
+screen to say so. Dolphin's "Act as Administrator" opened two dialogs at
+once, and the dialog could open behind the active window. Together that left
+admin folders failing with "Access denied to ." while an unseen dialog sat
+open, until someone answered it or restarted the agent. Ours (`admin-auth/`,
+`Containerfile`'s `admin-auth-builder` stage, which rebuilds each package
+from Fedora's own source RPM plus one patch):
+
+- **The dialog** (`polkit-kde.patch`): a request that comes while a dialog is
+  open waits its turn. The open dialog comes to the front, and a notification
+  says another program is waiting, with **Show** to bring the dialog up. A
+  dialog whose asking process has exited closes, along with any waiting
+  request of that process.
+- **polkit-qt** (`polkit-qt-1.patch`): tells the agent which request polkit
+  cancelled, so the right one closes when several are open or waiting.
+- **Dolphin's admin mode** (`kio-admin.patch`): the job that watches for the
+  authorization to expire no longer asks for the password itself (that was
+  the second dialog). It waits for the folder's own prompt. Calls to the root
+  helper wait up to 10 minutes for the password instead of D-Bus's
+  25 seconds, and a failed or cancelled prompt says "Authentication as
+  administrator failed or was cancelled." instead of "Access denied to .".
+- **KWin** (`overlay/etc/xdg/kwinrulesrc`): the dialog opens in front, with
+  focus, despite focus-stealing prevention.
+
+If a new version moves the patched code, the build stops and says which patch
+didn't apply.
+
 ## App updates on launch
 
 (Where every Quine app is published and how each updates:

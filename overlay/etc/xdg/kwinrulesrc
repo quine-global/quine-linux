@@ -1,0 +1,25 @@
+# System-wide KWin window rules (quine-linux overlay). System Settings →
+# Window Management → Window Rules lists these with each user's own, and
+# saves them all to ~/.config/kwinrulesrc.
+
+# The administrator password dialog (polkit's KDE agent) opens in front and
+# takes focus. Most programs that ask for it (Dolphin's "Act as
+# Administrator" among them) hand KWin no activation token, so focus-stealing
+# prevention opened it behind the active window, where nobody saw it; and
+# while one is open, every other request waits for it (README,
+# "Administrator prompts").
+# fsplevel 0: no focus-stealing prevention, fsplevelrule 2: force.
+# above: keep above others, aboverule 3: apply initially (the user can still
+# lower it). wmclassmatch 1: exact match on the Wayland app id.
+[General]
+count=1
+rules=quine-polkit-dialog
+
+[quine-polkit-dialog]
+Description=Administrator password dialog: in front, with focus
+wmclass=org.kde.polkit-kde-authentication-agent-1
+wmclassmatch=1
+fsplevel=0
+fsplevelrule=2
+above=true
+aboverule=3

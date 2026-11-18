@@ -1,0 +1,87 @@
+diff --git a/agent/listeneradapter.cpp b/agent/listeneradapter.cpp
+index a1b84e9..0663b0f 100644
+--- a/agent/listeneradapter.cpp
++++ b/agent/listeneradapter.cpp
+@@ -106,12 +106,21 @@ gboolean ListenerAdapter::polkit_qt_listener_initiate_authentication_finish(Polk
+     return true;
+ }
+ 
+-void ListenerAdapter::cancelled_cb(PolkitAgentListener *listener)
++void ListenerAdapter::cancelled_cb(PolkitAgentListener *listener, const gchar *cookie)
+ {
+     qDebug() << "cancelled_cb for " << listener;
+ 
+     Listener *list = findListener(listener);
+ 
++    // A listener that handles several requests at once has a slot
++    // cancelAuthenticationForCookie(QString): cancel just the request with this
++    // cookie. Listener's own cancelAuthentication() can't say which one.
++    if (list->metaObject()->indexOfMethod("cancelAuthenticationForCookie(QString)") >= 0) {
++        QMetaObject::invokeMethod(list, "cancelAuthenticationForCookie", Qt::DirectConnection,
++                                  Q_ARG(QString, QString::fromUtf8(cookie)));
++        return;
++    }
++
+     list->cancelAuthentication();
+ }
+ 
+diff --git a/agent/listeneradapter_p.h b/agent/listeneradapter_p.h
+index deb3711..766a640 100644
+--- a/agent/listeneradapter_p.h
++++ b/agent/listeneradapter_p.h
+@@ -51,7 +51,7 @@ public:
+     gboolean polkit_qt_listener_initiate_authentication_finish(PolkitAgentListener  *listener,
+             GAsyncResult         *res,
+             GError               **error);
+-    void cancelled_cb(PolkitAgentListener *listener);
++    void cancelled_cb(PolkitAgentListener *listener, const gchar *cookie);
+ private:
+     void addListener(Listener *listener);
+     void removeListener(Listener *listener);
+diff --git a/agent/polkitqtlistener.cpp b/agent/polkitqtlistener.cpp
+index e8713b5..c355ed0 100644
+--- a/agent/polkitqtlistener.cpp
++++ b/agent/polkitqtlistener.cpp
+@@ -81,9 +81,25 @@ PolkitAgentListener *polkit_qt_listener_new(void)
+     return POLKIT_AGENT_LISTENER(g_object_new(POLKIT_QT_TYPE_LISTENER, nullptr));
+ }
+ 
++// Which listener a cancellation is for, and which of its requests: the
++// cookie names the request, so an agent with several requests open (one
++// shown, others waiting) cancels the right one.
++struct CancelledData {
++    PolkitAgentListener *listener;
++    gchar *cookie;
++};
++
++static void cancelled_data_free(gpointer data)
++{
++    auto cancelled = static_cast<CancelledData *>(data);
++    g_free(cancelled->cookie);
++    g_free(cancelled);
++}
++
+ static void cancelled_cb(GCancellable *cancellable, gpointer user_data)
+ {
+-    ListenerAdapter::instance()->cancelled_cb((PolkitAgentListener *)user_data);
++    auto cancelled = static_cast<CancelledData *>(user_data);
++    ListenerAdapter::instance()->cancelled_cb(cancelled->listener, cancelled->cookie);
+ }
+ 
+ static void polkit_qt_listener_initiate_authentication(PolkitAgentListener  *agent_listener,
+@@ -101,10 +117,13 @@ static void polkit_qt_listener_initiate_authentication(PolkitAgentListener  *age
+     PolkitQtListener *listener = POLKIT_QT_LISTENER(agent_listener);
+ 
+     if (cancellable != nullptr) {
++        auto cancelled = g_new0(CancelledData, 1);
++        cancelled->listener = agent_listener;
++        cancelled->cookie = g_strdup(cookie);
+         g_cancellable_connect(cancellable,
+                               G_CALLBACK(cancelled_cb),
+-                              agent_listener,
+-                              nullptr);
++                              cancelled,
++                              cancelled_data_free);
+     }
+ 
+     // The result of asynchronous method will be created here and it will be pushed to the listener.

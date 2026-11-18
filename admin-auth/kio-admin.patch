@@ -1,0 +1,217 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 10d9ce4..23521ed 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -35,6 +35,7 @@ target_link_libraries(admin
+     PUBLIC KF6::KIOCore
+     PRIVATE atomic
+     PolkitQt6-1::Core
++    KF6::I18n
+     Qt::Core
+     Qt::DBus)
+ set_target_properties(admin PROPERTIES OUTPUT_NAME "admin")
+diff --git a/src/worker.cpp b/src/worker.cpp
+index 7ae52f9..e550f15 100644
+--- a/src/worker.cpp
++++ b/src/worker.cpp
+@@ -12,6 +12,7 @@
+ #include <polkitqt1-authority.h>
+ 
+ #include <KIO/WorkerBase>
++#include <KLocalizedString>
+ #include <KIO/WorkerFactory>
+ 
+ #include "dbustypes.h"
+@@ -41,6 +42,26 @@ constexpr auto killPollInterval = 200ms;
+  * decision in the past.
+  */
+ constexpr std::chrono::duration durationForWhichWeHonorAUsersChoice{5s};
++
++/**
++ * How long a call to the helper may take. Its first call asks for the password
++ * (polkit's dialog), and the helper takes one call at a time, so a call can
++ * wait for as long as someone takes to type a password, or to answer an
++ * earlier dialog first; D-Bus's default of 25 seconds failed such calls while
++ * the dialog was still open.
++ */
++constexpr int helperCallTimeoutMs = 10 * 60 * 1000;
++
++QDBusMessage callHelper(const QDBusMessage &request)
++{
++    return QDBusConnection::systemBus().call(request, QDBus::Block, helperCallTimeoutMs);
++}
++
++/** What a request that polkit turned down says, instead of "Access denied to ." */
++QString authorizationFailedText()
++{
++    return i18nc("@info", "Authentication as administrator failed or was cancelled.");
++}
+ } // namespace
+ 
+ /**
+@@ -190,11 +211,21 @@ public:
+         qWarning() << msg.errorName() << msg.errorMessage();
+         switch (QDBusError(msg).type()) {
+         case QDBusError::AccessDenied:
+-            return WorkerResult::fail(ERR_ACCESS_DENIED, msg.errorMessage());
++            // The helper turns down a call that polkit didn't authorize with an
++            // empty AccessDenied, which ERR_ACCESS_DENIED showed as "Access
++            // denied to ." (the empty message where a path goes).
++            if (msg.errorMessage().isEmpty()) {
++                return WorkerResult::fail(ERR_WORKER_DEFINED, authorizationFailedText());
++            }
++            return WorkerResult::fail(ERR_WORKER_DEFINED, i18nc("@info %1 is an error message", "Access denied: %1", msg.errorMessage()));
++        case QDBusError::NoReply:
++        case QDBusError::Timeout:
++        case QDBusError::TimedOut:
++            return WorkerResult::fail(ERR_WORKER_DEFINED, i18nc("@info", "The administrator helper did not answer in time."));
+         default:
+             break;
+         }
+-        return WorkerResult::fail();
++        return WorkerResult::fail(ERR_WORKER_DEFINED, i18nc("@info %1 is an error message", "Could not reach the administrator helper: %1", msg.errorMessage()));
+     }
+ 
+     /** @returns true if \a request is considered more important than what was remembered previously. false otherwise. */
+@@ -283,12 +314,12 @@ public:
+         ReadAuthorizationRequest thisRequest;
+         const auto resultOfPreviousSimilarRequest = resultOfPreviousRequestSimilarTo(thisRequest);
+         if (resultOfPreviousSimilarRequest && resultOfPreviousSimilarRequest == ReadAuthorizationRequest::Result::Denied) {
+-            return WorkerResult::fail();
++            return WorkerResult::fail(ERR_WORKER_DEFINED, authorizationFailedText());
+         }
+ 
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("listDir"));
+         request << url.toString();
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         thisRequest.setResult(reply);
+ 
+         considerRemembering(thisRequest);
+@@ -328,7 +359,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("file"));
+         request << url.toString() << (int)mode;
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -420,7 +451,7 @@ public:
+     {
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("put"));
+         request << url.toString() << permissions << static_cast<int>(flags);
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -448,12 +479,12 @@ public:
+         ReadAuthorizationRequest thisRequest;
+         const auto resultOfPreviousSimilarRequest = resultOfPreviousRequestSimilarTo(thisRequest);
+         if (resultOfPreviousSimilarRequest && resultOfPreviousSimilarRequest == ReadAuthorizationRequest::Result::Denied) {
+-            return WorkerResult::fail();
++            return WorkerResult::fail(ERR_WORKER_DEFINED, authorizationFailedText());
+         }
+ 
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("stat"));
+         request << url.toString();
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         thisRequest.setResult(reply);
+ 
+         considerRemembering(thisRequest);
+@@ -486,7 +517,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("copy"));
+         request << src.toString() << dest.toString() << permissions << static_cast<int>(flags);
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -506,7 +537,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("get"));
+         request << url.toString();
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -534,7 +565,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("del"));
+         request << url.toString();
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -553,7 +584,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("mkdir"));
+         request << url.toString() << permissions;
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -572,7 +603,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("rename"));
+         request << src.toString() << dest.toString() << static_cast<int>(flags);
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -593,7 +624,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("chmod"));
+         request << url.toString() << permissions;
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -612,7 +643,7 @@ public:
+         qCDebug(KIOADMIN_LOG) << Q_FUNC_INFO;
+         auto request = QDBusMessage::createMethodCall(serviceName(), servicePath(), serviceInterface(), QStringLiteral("chown"));
+         request << url.toString() << owner << group;
+-        auto reply = QDBusConnection::systemBus().call(request);
++        auto reply = callHelper(request);
+         if (reply.type() == QDBusMessage::ErrorMessage) {
+             return toFailure(reply);
+         }
+@@ -640,13 +671,27 @@ public:
+         stream >> tmp;
+         switch (tmp) {
+         case 1: { // Wait until the authorization has expired and only return then.
++            // Without asking for it: Dolphin starts this as soon as it shows an
++            // admin: folder, so the folder's own listing is asking at the same
++            // time, for the same process. Asking here too opened a second
++            // password dialog; polkit's KDE agent turned down everything else
++            // while that one was open (and it could be behind a window), so
++            // admin: folders failed with "Access denied to .". Instead: wait
++            // until the process is authorized (the listing's dialog), then
++            // until that expires.
+             auto authority = PolkitQt1::Authority::instance();
+             PolkitQt1::UnixProcessSubject process(QCoreApplication::applicationPid());
+-            PolkitQt1::Authority::Result result =
+-                authority->checkAuthorizationSync(QStringLiteral("org.kde.kio.admin.commands"), process, PolkitQt1::Authority::AllowUserInteraction);
++            const auto check = [&authority, &process] {
++                return authority->checkAuthorizationSync(QStringLiteral("org.kde.kio.admin.commands"), process, PolkitQt1::Authority::None);
++            };
++            PolkitQt1::Authority::Result result = check();
++            while (result != PolkitQt1::Authority::Yes && !wasKilled()) {
++                std::this_thread::sleep_for(2s);
++                result = check();
++            }
+             while (result == PolkitQt1::Authority::Yes && !wasKilled()) {
+                 std::this_thread::sleep_for(5s);
+-                result = authority->checkAuthorizationSync(QStringLiteral("org.kde.kio.admin.commands"), process, PolkitQt1::Authority::None);
++                result = check();
+             }
+             return WorkerResult::pass();
+         }

@@ -1,0 +1,318 @@
+diff --git a/policykitlistener.cpp b/policykitlistener.cpp
+index 0fc8b51..22179ef 100644
+--- a/policykitlistener.cpp
++++ b/policykitlistener.cpp
+@@ -9,10 +9,18 @@
+ #include <QDebug>
+ #include <QGuiApplication>
+ #include <QQmlEngine>
++#include <QQuickWindow>
++#include <QSocketNotifier>
++#include <QTimer>
+ 
+ #include <KLocalizedString>
++#include <KNotification>
+ #include <KWindowSystem>
+ 
++#include <cerrno>
++#include <sys/syscall.h>
++#include <unistd.h>
++
+ #include <PolkitQt1/ActionDescription>
+ #include <PolkitQt1/Agent/Session>
+ #include <PolkitQt1/Details>
+@@ -81,13 +89,6 @@ void PolicyKitListener::initiateAuthentication(const QString &actionId,
+ 
+     qDebug() << "Initiating authentication";
+ 
+-    if (m_inProgress) {
+-        result->setError(i18n("Another client is already authenticating, please try again later."));
+-        result->setCompleted();
+-        qDebug() << "Another client is already authenticating, please try again later.";
+-        return;
+-    }
+-
+     if (identities.isEmpty()) {
+         result->setError(i18nc("Error response when polkit calls us with an empty list of identities", "No user to authenticate as. Please check your system configuration."));
+         result->setCompleted();
+@@ -95,10 +96,38 @@ void PolicyKitListener::initiateAuthentication(const QString &actionId,
+         return;
+     }
+ 
++    Request request{actionId, message, details, cookie, identities, result, nullptr};
++    watchSubject(request);
++
++    // One dialog at a time: a request that comes while one is open waits its
++    // turn, instead of failing at once with nothing on screen to say why
++    // (which left Dolphin's "Act as Administrator" saying "Access denied to ."
++    // while the open dialog sat behind a window). The open dialog comes to the
++    // front, and a notification says what's waiting.
++    if (m_inProgress) {
++        qDebug() << "Another request is open; this one waits:" << actionId;
++        m_waiting.append(request);
++        raiseDialog(QString());
++        notifyWaiting();
++        return;
++    }
++
++    startAuthentication(request);
++}
++
++void PolicyKitListener::startAuthentication(const Request &request)
++{
++    const QString &actionId = request.actionId;
++    const QString &message = request.message;
++    const PolkitQt1::Details &details = request.details;
++    const PolkitQt1::Identity::List &identities = request.identities;
++
+     m_identities = identities;
+-    m_cookie = cookie;
+-    m_result = result;
++    m_cookie = request.cookie;
++    m_result = request.result;
++    m_subjectExited = request.subjectExited;
+     m_session.clear();
++    m_gainedAuthorization = false;
+ 
+     m_inProgress = true;
+ 
+@@ -131,6 +160,110 @@ void PolicyKitListener::initiateAuthentication(const QString &actionId,
+     tryAgain();
+ }
+ 
++void PolicyKitListener::startNextWaiting()
++{
++    if (m_inProgress || m_waiting.isEmpty()) {
++        return;
++    }
++    startAuthentication(m_waiting.takeFirst());
++}
++
++// Watches the process that asked (polkit's subject, which polkitd passes in
++// the details as polkit.subject-pid) with a pidfd, so a request whose asker
++// has exited is cancelled: its dialog closes instead of staying open with
++// nothing to answer, keeping every request after it waiting. polkitd cancels
++// such a request itself only when the subject or caller was a D-Bus name
++// that went away.
++void PolicyKitListener::watchSubject(Request &request)
++{
++    bool ok = false;
++    const int pid = request.details.lookup(QStringLiteral("polkit.subject-pid")).toInt(&ok);
++    if (!ok || pid <= 0) {
++        return;
++    }
++    const int fd = static_cast<int>(syscall(SYS_pidfd_open, pid, 0));
++    if (fd < 0) {
++        if (errno == ESRCH) {
++            // Already gone: cancel it once it's been queued or opened.
++            const QString cookie = request.cookie;
++            QTimer::singleShot(0, this, [this, cookie] {
++                subjectExited(cookie);
++            });
++        }
++        return;
++    }
++    request.subjectExited = new QSocketNotifier(fd, QSocketNotifier::Read, this);
++    const QString cookie = request.cookie;
++    connect(request.subjectExited, &QSocketNotifier::activated, this, [this, cookie] {
++        subjectExited(cookie);
++    });
++}
++
++void PolicyKitListener::stopWatching(QSocketNotifier *&notifier)
++{
++    if (notifier) {
++        notifier->setEnabled(false);
++        close(static_cast<int>(notifier->socket()));
++        notifier->deleteLater();
++        notifier = nullptr;
++    }
++}
++
++void PolicyKitListener::subjectExited(const QString &cookie)
++{
++    if (m_inProgress && cookie == m_cookie) {
++        qDebug() << "The process that asked for authentication has exited; closing its dialog";
++        dialogCanceled();
++        return;
++    }
++    for (qsizetype i = 0; i < m_waiting.size(); ++i) {
++        if (m_waiting[i].cookie == cookie) {
++            qDebug() << "The process that asked for authentication has exited; dropping its waiting request";
++            finishWaiting(i, i18n("The process that asked for authentication has exited."));
++            return;
++        }
++    }
++}
++
++// Ends a request that never got to open: with an error if one's given
++// (polkit then denies it), without when polkit cancelled it itself.
++void PolicyKitListener::finishWaiting(qsizetype index, const QString &error)
++{
++    Request request = m_waiting.takeAt(index);
++    stopWatching(request.subjectExited);
++    if (!error.isEmpty()) {
++        request.result->setError(error);
++    }
++    request.result->setCompleted();
++    delete request.result;
++}
++
++void PolicyKitListener::raiseDialog(const QString &activationToken)
++{
++    if (!m_dialog || !m_dialog->windowHandle()) {
++        return;
++    }
++    if (!activationToken.isEmpty()) {
++        qputenv("XDG_ACTIVATION_TOKEN", activationToken.toUtf8());
++    }
++    m_dialog->windowHandle()->raise();
++    m_dialog->windowHandle()->requestActivate();
++}
++
++void PolicyKitListener::notifyWaiting()
++{
++    auto notification = new KNotification(QStringLiteral("waiting"));
++    notification->setTitle(i18n("Authentication Required"));
++    notification->setText(i18n("Another program is waiting to ask for your password. Answer or cancel the open \"Authentication Required\" window first."));
++    notification->setIconName(QStringLiteral("dialog-password"));
++    auto show = notification->addDefaultAction(i18n("Show"));
++    connect(show, &KNotificationAction::activated, this, [this, notification] {
++        // The token from the click lets the dialog take focus on Wayland.
++        raiseDialog(notification->xdgActivationToken());
++    });
++    notification->sendEvent();
++}
++
+ void PolicyKitListener::handleParentWindow(const QString &action, const QString &handle)
+ {
+     if (!m_dialog || m_dialog->actionId() != action) {
+@@ -173,6 +306,12 @@ void PolicyKitListener::finishObtainPrivilege()
+ {
+     qDebug() << "Finishing obtaining privileges";
+ 
++    // Cancelling the session completes it too, so this can come twice for
++    // one request; the first finished it.
++    if (!m_inProgress) {
++        return;
++    }
++
+     // Number of tries increase only when some user is selected
+     if (m_selectedUser.isValid()) {
+         m_numTries++;
+@@ -202,8 +341,12 @@ void PolicyKitListener::finishObtainPrivilege()
+     }
+ 
+     m_inProgress = false;
++    stopWatching(m_subjectExited);
+ 
+     qDebug() << "Finish obtain authorization:" << m_gainedAuthorization;
++
++    // The next waiting request, once this dialog has gone.
++    QTimer::singleShot(0, this, &PolicyKitListener::startNextWaiting);
+ }
+ 
+ bool PolicyKitListener::initiateAuthenticationFinish()
+@@ -220,6 +363,27 @@ void PolicyKitListener::cancelAuthentication()
+     finishObtainPrivilege();
+ }
+ 
++void PolicyKitListener::cancelAuthenticationForCookie(const QString &cookie)
++{
++    qDebug() << "Cancelling authentication" << cookie;
++
++    if (m_inProgress && cookie == m_cookie) {
++        // As dialogCanceled(): the session too, so its helper stops asking.
++        m_wasCancelled = true;
++        if (!m_session.isNull()) {
++            m_session.data()->cancel();
++        }
++        finishObtainPrivilege();
++        return;
++    }
++    for (qsizetype i = 0; i < m_waiting.size(); ++i) {
++        if (m_waiting[i].cookie == cookie) {
++            finishWaiting(i, QString());
++            return;
++        }
++    }
++}
++
+ void PolicyKitListener::request(const QString &request, bool echo)
+ {
+     qDebug() << "Request: " << request << " echo: " << echo;
+diff --git a/policykitlistener.h b/policykitlistener.h
+index 339cf52..cffc210 100644
+--- a/policykitlistener.h
++++ b/policykitlistener.h
+@@ -9,10 +9,14 @@
+ */
+ 
+ #include <QHash>
++#include <QList>
+ #include <QPointer>
+ 
+ #include <PolkitQt1/Agent/Listener>
++#include <PolkitQt1/Details>
++#include <PolkitQt1/Identity>
+ 
++class QSocketNotifier;
+ class QuickAuthDialog;
+ 
+ using namespace PolkitQt1::Agent;
+@@ -35,6 +39,10 @@ public Q_SLOTS:
+                                 PolkitQt1::Agent::AsyncResult *result) override;
+     bool initiateAuthenticationFinish() override;
+     void cancelAuthentication() override;
++    // polkit cancelled the request with this cookie: the open one, or one
++    // waiting its turn. polkit-qt calls this, when it has it, instead of
++    // cancelAuthentication(), which can't say which request.
++    void cancelAuthenticationForCookie(const QString &cookie);
+ 
+     void tryAgain();
+     void finishObtainPrivilege();
+@@ -49,6 +57,31 @@ public Q_SLOTS:
+     void setActivationTokenForAction(const QString &action, const QString &token);
+ 
+ private:
++    // A request for authentication: the one open in the dialog, or one waiting
++    // until that one is done (the agent shows one dialog at a time).
++    struct Request {
++        QString actionId;
++        QString message;
++        PolkitQt1::Details details;
++        QString cookie;
++        PolkitQt1::Identity::List identities;
++        PolkitQt1::Agent::AsyncResult *result = nullptr;
++        // Readable once the process that asked (polkit's subject) exits;
++        // nullptr if it can't be watched.
++        QSocketNotifier *subjectExited = nullptr;
++    };
++    QList<Request> m_waiting;
++    QSocketNotifier *m_subjectExited = nullptr;
++
++    void startAuthentication(const Request &request);
++    void startNextWaiting();
++    void watchSubject(Request &request);
++    void subjectExited(const QString &cookie);
++    void finishWaiting(qsizetype index, const QString &error);
++    static void stopWatching(QSocketNotifier *&notifier);
++    void raiseDialog(const QString &activationToken);
++    void notifyWaiting();
++
+     QPointer<QuickAuthDialog> m_dialog;
+     QPointer<Session> m_session = nullptr;
+     bool m_inProgress;
+diff --git a/polkit-kde-authentication-agent-1.notifyrc b/polkit-kde-authentication-agent-1.notifyrc
+index 9a08464..c457eea 100644
+--- a/polkit-kde-authentication-agent-1.notifyrc
++++ b/polkit-kde-authentication-agent-1.notifyrc
+@@ -234,3 +234,8 @@ Comment[zh_CN]=您需要进行身份验证
+ Comment[zh_TW]=您需要認證
+ Action=Sound
+ Sound=dialog-warning-auth
++
++[Event/waiting]
++Name=Request waiting
++Comment=Another program is waiting to ask for your password
++Action=Popup

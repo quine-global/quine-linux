@@ -110,6 +110,15 @@ FROM updated AS taskmanager-builder
 COPY taskmanager/ /tmp/taskmanager/
 RUN /tmp/taskmanager/build.sh
 
+# --- Rebuilds what's behind administrator password prompts (README,
+# "Administrator prompts"): polkit-qt6-1, polkit-kde (the password dialog)
+# and kio-admin (Dolphin's "Act as Administrator"), each from Fedora's own
+# source RPM of the version the image ships, plus our patch in admin-auth/.
+FROM updated AS admin-auth-builder
+
+COPY admin-auth/ /tmp/admin-auth/
+RUN /tmp/admin-auth/build.sh
+
 # --- Python packages for our scripts (quine-app-updates), with uv. ---
 # python/pyproject.toml lists them and python/uv.lock pins each version and
 # its sdist's hash (`uv sync --frozen` refuses anything else). They go into
@@ -219,6 +228,14 @@ COPY --from=kickoff-builder /out/usr/lib64/qt6/plugins/plasma/applets/org.kde.pl
 # libtaskmanager with our launch feedback (taskmanager-builder, above), over
 # plasma-workspace-libs': the same file name, which libtaskmanager.so.6 links to.
 COPY --from=taskmanager-builder /out/usr/lib64/ /usr/lib64/
+
+# polkit-qt6-1, polkit-kde and kio-admin with our patches (admin-auth-builder,
+# above): the same versions as Fedora's, release <Fedora's>.quine, so they
+# replace them as packages (rpm -V stays clean).
+COPY --from=admin-auth-builder /out/ /tmp/admin-auth-rpms/
+RUN dnf install -y /tmp/admin-auth-rpms/*.rpm && \
+    rpm -q polkit-qt6-1 polkit-kde kio-admin | tee /dev/stderr | grep -c '\.quine\.' | grep -qx 3 && \
+    rm -rf /tmp/admin-auth-rpms
 
 # System-level units are enabled explicitly.
 # quine-update-check.timer: the status Kickoff's update bar shows.
