@@ -46,32 +46,58 @@ export const DataDisk = ({ setIsFormValid }) => {
     const { diskSelection } = useContext(StorageContext);
     const selectedDisks = useMemo(() => diskSelection?.selectedDisks || [], [diskSelection]);
 
-    // Filesystems that could hold the data, and whether the install would
-    // erase them (they're on a disk selected for the system).
-    const candidates = useMemo(() => Object.values(devices || {})
-            .filter(d => FILESYSTEMS.includes(d.formatData?.type?.v))
-            .filter(d => !(d.children?.v?.length))
-            .map(d => {
-                const disk = diskOf(devices, d);
-                return {
-                    name: d.name.v,
-                    path: d.path.v,
-                    size: d.size.v,
-                    fs: d.formatData.type.v,
-                    label: attr(d, "label"),
-                    uuid: attr(d, "uuid"),
-                    diskName: disk?.name?.v,
-                    diskDescription: disk?.description?.v || "",
-                    onInstallDisk: selectedDisks.includes(disk?.name?.v),
-                };
-            })
-            .sort((a, b) => a.name.localeCompare(b.name)), [devices, selectedDisks]);
+    // Filesystems that could hold the data: one per partition (a btrfs
+    // partition's subvolumes all have its path, and the install mounts the
+    // path), and only on disks the system isn't going to, which it erases.
+    const candidates = useMemo(() => {
+        const byPath = new Map();
+        Object.values(devices || {})
+                .filter(d => FILESYSTEMS.includes(d.formatData?.type?.v))
+                .filter(d => !(d.children?.v?.length))
+                .forEach(d => {
+                    const disk = diskOf(devices, d);
+                    if (selectedDisks.includes(disk?.name?.v) || byPath.has(d.path.v)) {
+                        return;
+                    }
+                    byPath.set(d.path.v, {
+                        path: d.path.v,
+                        size: d.size.v,
+                        fs: d.formatData.type.v,
+                        label: attr(d, "label"),
+                        uuid: attr(d, "uuid"),
+                        diskDescription: disk?.description?.v || "",
+                    });
+                });
+        return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+    }, [devices, selectedDisks]);
 
-    const labeled = candidates.find(c => !c.onInstallDisk && DATA_LABELS.includes(c.label.toLowerCase()));
-    const [useDisk, setUseDisk] = useState(!!labeled);
-    const [chosen, setChosen] = useState(labeled?.name || "");
-    const chosenCandidate = candidates.find(c => c.name === chosen);
-    const valid = !useDisk || (!!chosenCandidate && !chosenCandidate.onInstallDisk);
+    // The partition to suggest: one labelled for this ("data", "hdd"), else
+    // the largest. With one, the second disk is what's chosen to begin with:
+    // a second disk is what this step is for.
+    const suggested = useMemo(() => (
+        candidates.find(c => DATA_LABELS.includes(c.label.toLowerCase())) ||
+        [...candidates].sort((a, b) => b.size - a.size)[0]
+    ), [candidates]);
+    const [useDisk, setUseDisk] = useState(false);
+    const [chosen, setChosen] = useState("");
+    // The disks are read after the page first draws, so the suggestion is
+    // applied when they arrive, unless a choice has been made by then.
+    const [touched, setTouched] = useState(false);
+    useEffect(() => {
+        if (!touched && suggested) {
+            setUseDisk(true);
+            setChosen(suggested.path);
+        }
+    }, [touched, suggested]);
+    const chosenCandidate = candidates.find(c => c.path === chosen);
+    // Using the disk with nothing (or something gone, after going back to
+    // change the system disk) chosen: the suggestion.
+    useEffect(() => {
+        if (useDisk && !chosenCandidate && suggested) {
+            setChosen(suggested.path);
+        }
+    }, [useDisk, chosenCandidate, suggested]);
+    const valid = !useDisk || !!chosenCandidate;
 
     useEffect(() => {
         setIsFormValid(valid);
@@ -84,7 +110,6 @@ export const DataDisk = ({ setIsFormValid }) => {
         const content = useDisk && valid && chosenCandidate
             ? JSON.stringify({
                 device: chosenCandidate.path,
-                name: chosenCandidate.name,
                 label: chosenCandidate.label,
                 uuid: chosenCandidate.uuid,
             }) + "\n"
@@ -112,41 +137,43 @@ export const DataDisk = ({ setIsFormValid }) => {
                   id={SCREEN_ID + "-none"}
                   name={SCREEN_ID + "-choice"}
                   isChecked={!useDisk}
-                  onChange={() => setUseDisk(false)}
+                  onChange={() => { setTouched(true); setUseDisk(false); }}
                   label={_("Keep everything on the system disk")}
                 />
                 <Radio
                   id={SCREEN_ID + "-use"}
                   name={SCREEN_ID + "-choice"}
                   isChecked={useDisk}
-                  onChange={() => setUseDisk(true)}
+                  onChange={() => { setTouched(true); setUseDisk(true); }}
                   label={_("Use a second disk for home folders, apps and containers")}
                   description={_("Its files are kept, nothing on it is erased. If it already holds home folders, apps and containers from an earlier install, they're used again.")}
                 />
             </FormGroup>
             {useDisk && candidates.length === 0 &&
-                <Alert isInline variant="warning" title={_("No usable partition found")}>
-                    {_("Only an existing ext4, XFS or Btrfs partition can be used. Create one first, for example with KDE Partition Manager.")}
+                <Alert isInline variant="warning" title={_("No second disk to use")}>
+                    {_("This needs an ext4, XFS or Btrfs partition on a disk other than the system's. Create one first, for example with KDE Partition Manager, or keep everything on the system disk.")}
                 </Alert>}
-            {useDisk && candidates.length > 0 &&
+            {useDisk && candidates.length > 1 &&
                 <FormGroup role="radiogroup" isStack label={_("Partition")} fieldId={SCREEN_ID + "-partition"}>
                     {candidates.map(c => (
                         <Radio
-                          key={c.name}
-                          id={SCREEN_ID + "-partition-" + c.name}
+                          key={c.path}
+                          id={SCREEN_ID + "-partition-" + c.path.replace(/\W/g, "-")}
                           name={SCREEN_ID + "-partition"}
-                          isChecked={chosen === c.name}
-                          isDisabled={c.onInstallDisk}
-                          onChange={() => setChosen(c.name)}
+                          isChecked={chosen === c.path}
+                          onChange={() => { setTouched(true); setChosen(c.path); }}
                           label={describe(c)}
-                          description={c.onInstallDisk ? _("On the disk the system is being installed to, so it would be erased.") : ""}
                         />
                     ))}
                 </FormGroup>}
-            {useDisk && chosenCandidate && !chosenCandidate.onInstallDisk &&
-                <Alert isInline variant="info" title={_("Create the same user name at first start")}>
-                    {cockpit.format(_("Home folders already on $0 (home-<name>) are matched to users by name. When the computer first starts, create your account with the same user name as before to get your files back."), chosenCandidate.path)}
-                </Alert>}
+            {useDisk && candidates.length === 1 && chosenCandidate &&
+                <Content component="p">
+                    {cockpit.format(_("Using $0."), describe(chosenCandidate))}
+                </Content>}
+            {useDisk && chosenCandidate &&
+                <Content component="small">
+                    {_("Reinstalling? Home folders already on this disk are given back by user name: when the computer first starts, create your account with the same user name as before.")}
+                </Content>}
         </Form>
     );
 };
