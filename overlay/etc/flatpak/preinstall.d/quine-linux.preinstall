@@ -20,6 +20,11 @@ IsRuntime=false
 Branch=stable
 IsRuntime=false
 
+# Audacity: audio recording and editing, from Flathub.
+[Flatpak Preinstall org.audacityteam.Audacity]
+Branch=stable
+IsRuntime=false
+
 # KeyMaker: makes and manages SSH keys (ssh-agent holds them; see README,
 # "SSH and GPG agents"). Our fork's build (new keys get id_ed25519 etc.
 # when free), from our own repo, remotes.d/quine.flatpakrepo: the

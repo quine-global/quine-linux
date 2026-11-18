@@ -171,8 +171,11 @@ RUN /usr/lib/quine-linux/python/bin/python3 -c \
 # layer-wizard, not just this image.
 
 # Removes apps from the base image's default set that don't belong in ours.
-# Native RPMs: plasma-welcome (Welcome Center), Sunshine (game-stream host).
-RUN dnf remove -y plasma-welcome Sunshine
+# Native RPMs: plasma-welcome (Welcome Center), Sunshine (game-stream host),
+# KDE Connect (phone pairing: notifications, files and clipboard between a
+# phone and the computer; kde-connect, its daemon and libs, which nothing
+# else needs).
+RUN dnf remove -y plasma-welcome Sunshine kde-connect kdeconnectd kde-connect-libs
 
 # Our name, over Aurora's, in os-release: what the installer (its title and
 # "Let's install ... now"), Plasma's About page and fastfetch show, and new
