@@ -221,14 +221,16 @@ tasks:
     desc: >-
       Put the newest build (or TAG, a release tag) on zeus's test VM (107),
       boot it and wait for it to come up (.forgejo/vm-test.sh,
-      docs/VM_TEST.md). From a laptop on the tailnet it needs nothing but
-      root SSH to zeus and the forge VM; CI uses PVE_TOKEN and MinIO's
-      secrets instead. The VM stays up at the live desktop.
-      Examples: task test:vm; task test:vm TAG=v0.1.2
+      docs/VM_TEST.md): its disk image, installed, as the VM's system disk,
+      or with KIND=live the live ISO (the installer) on its CD. From a laptop
+      on the tailnet it needs nothing but root SSH to zeus and the forge VM;
+      CI uses PVE_TOKEN and MinIO's secrets instead. The VM stays up.
+      Examples: task vm; task vm TAG=v0.1.2; task vm KIND=live
     vars:
       TAG: '{{.TAG | default "latest"}}'
+      KIND: '{{.KIND | default "disk"}}'
     cmds:
-      - bash .forgejo/vm-test.sh {{.TAG}}
+      - bash .forgejo/vm-test.sh {{.TAG}} {{.KIND}}
 
   revert:
     desc: >-
