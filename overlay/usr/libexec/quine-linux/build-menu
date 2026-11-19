@@ -8,7 +8,9 @@ The tree (the repo's menu/, in the image at /usr/share/quine-linux/menu):
   Internet/                 a folder in the menu, named as the directory
     .icon                   its icon (an icon name)
     Quple                   an app, named as the file; the file holds the
-                            app's desktop file ID (com.quineglobal.Quple)
+                            app's desktop file ID (com.quineglobal.Quple),
+                            or several, one per line, for one app packaged
+                            differently (Firefox: the Flatpak, Fedora's RPM)
   Other/.everything-else    this folder gets every app placed nowhere else
   .hidden                   desktop file IDs in no folder and not found by
                             search (NoDisplay=true)
@@ -46,12 +48,15 @@ class Folder:
         self.folders = []
 
 
-def read_id(path):
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            return line.removesuffix(".desktop") + ".desktop"
-    sys.exit(f"build-menu: {path}: no desktop file ID in it")
+def read_ids(path):
+    ids = [
+        line.strip().removesuffix(".desktop") + ".desktop"
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not ids:
+        sys.exit(f"build-menu: {path}: no desktop file ID in it")
+    return ids
 
 
 def read_folder(path, name, errors):
@@ -68,7 +73,7 @@ def read_folder(path, name, errors):
         elif child.is_dir():
             folder.folders.append(read_folder(child, child.name, errors))
         else:
-            folder.apps.append((child.name, read_id(child)))
+            folder.apps += [(child.name, app) for app in read_ids(child)]
     if name is not None and not folder.icon:
         errors.append(f"{path}: no .icon")
     return folder

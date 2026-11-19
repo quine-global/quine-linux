@@ -7,7 +7,69 @@ should look and behave like today's Quine Linux (our apps, menu, Flatpaks,
 installer, fixes). Only how the system is put together and updated
 changes.
 
-Status: **plan**. Nothing below is built yet.
+Status: **phases 1–2 written, on the `stateful-edition` branch, not yet
+built end to end** (see "What's on the branch" below). Phases 3–5 are
+plan.
+
+## What's on the branch
+
+- `stateful/fedora.env`: Fedora 45, and the pinned commit of Fedora's
+  kiwi-descriptions (branch f45).
+- `stateful/kiwi/Quine.kiwi`: our top-level description. It includes
+  Fedora's components unchanged (common, boot, desktops/common,
+  desktops/kde, liveinstall, users) and `quine/quine.xml`.
+- `stateful/kiwi/quine/quine.xml`: profiles `Quine-KDE-Desktop-Live` (the
+  ISO) and `Quine-KDE-Desktop-Disk`, built like Fedora's `KDE-Desktop-Live`
+  and `-Disk`. It adds our repos, identity and packages, and leaves out KDE
+  Connect and the Welcome Center.
+- `stateful/kiwi/config-quine.sh`: appended to Fedora's `config.sh` (before
+  its final `exit 0`).
+- `stateful/packaging/`:
+  - `quine-linux-release`: our identity. It provides
+    `fedora-release-identity` in place of Fedora's KDE one, with Fedora's
+    os-release renamed (`NAME="Quine Linux"`, `VARIANT="Stateful Edition"`;
+    `ID=fedora` and `VARIANT_ID=kde` stay) and Fedora's KDE preset.
+  - `quine-linux-desktop`: the overlay's portable files and the menu tree,
+    with `build-menu` as a file trigger.
+- `stateful/build-in-container.sh` builds:
+  - those two RPMs, plus the administrator-prompt RPMs
+    (`admin-auth/build.sh`, unchanged), into a local repo;
+  - then the ISO with `kiwi-ng` (and the disk image with `--disk`).
+- `stateful/build.sh` runs that in a privileged `fedora:45` container.
+  Locally: `task stateful` (root podman, ~30 GB free).
+- `.forgejo/workflows/stateful.yml`: on pushes to this branch, and by hand
+  (with an option for the disk image). x86_64 only. Uploads to MinIO
+  `quine-linux/stateful/latest/`.
+
+Checked so far, in a `fedora:45` container:
+- both RPMs build;
+- they install over Fedora's identity (os-release reads Quine Linux 45
+  (Stateful Edition));
+- the menu file is generated;
+- the Firefox Flatpak is left out of the preinstall list;
+- KIWI loads the profile chain.
+
+**Not yet:** a whole KIWI build, or booting the result.
+
+**Known gaps before anyone installs it:**
+- **The `quine` repo is tailnet-only** (forge.in.quineglobal.com). An
+  installed machine off the tailnet can't update our apps. It needs a
+  public name for the forge's RPM packages (as registry.quineglobal.com is
+  for images), and quine-linux-release's `quine.repo` should point there.
+- **The rebuilt packages aren't published anywhere yet** (phase 3). An
+  installed system keeps the ISO's patched polkit-kde and the others only
+  until Fedora updates them.
+- **Kickoff's and the task manager's patches** aren't in it yet (phase 3:
+  full plasma-desktop/plasma-workspace rebuilds).
+- **New fedora-release builds need a quine-linux-release rebuild:**
+  `fedora-release-common` requires an identity of exactly its own version.
+- **Fedora KDE's extra apps** (Okular, Gwenview, Elisa, KMail, the games…)
+  aren't in the menu tree, so they land in **Other** until we place them.
+  The first build's log lists them (build-menu's "in no folder" line).
+- **Apps:** Fedora's RPM Firefox and LibreOffice, as Fedora KDE ships
+  them. The Firefox Flatpak is left out of the preinstall list
+  (quine-linux-desktop.spec); the menu tree's Firefox entry covers both.
+  Switching to the Flatpak is that one line, plus ignoring the RPM.
 
 Today's edition, the bootc image, is the **Home Edition**.
 

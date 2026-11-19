@@ -283,7 +283,6 @@ def read_menu_tree():
         if path.is_file() and not path.name.startswith("."):
             for app in ids(path):
                 names[app] = path.name
-                break
     hidden_file = MENU_TREE / ".hidden"
     if hidden_file.is_file():
         hidden.update(ids(hidden_file))

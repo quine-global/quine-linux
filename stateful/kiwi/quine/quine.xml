@@ -1,0 +1,63 @@
+<image>
+	<!-- Our edition's profiles: Fedora's KDE-Desktop (components/desktops/
+	     kde.xml) with the live ISO's or the disk image's pieces, as Fedora's
+	     teams/kde.xml does for KDE-Desktop-Live and -Disk, and ours on top.
+	     The names keep "KDE", "Desktop", "Live" and "Disk": Fedora's config.sh
+	     picks what to do by those words in $kiwi_profiles. -->
+	<profiles>
+		<profile name="Quine-KDE-Desktop-Live" description="Quine Linux Stateful Edition live ISO (the installer)">
+			<requires profile="KDE-Desktop"/>
+			<requires profile="LiveInstall"/>
+		</profile>
+		<profile name="Quine-KDE-Desktop-Disk" description="Quine Linux Stateful Edition disk image">
+			<requires profile="BootDiskCore"/>
+			<requires profile="KDE-Desktop"/>
+		</profile>
+	</profiles>
+
+	<!-- RPMs build-in-container.sh made for this build (quine-linux-release,
+	     quine-linux-desktop, the rebuilt administrator-prompt packages).
+	     Not kept in the image: installed systems get ours from the repos
+	     quine-linux-release configures. QUINE_LOCAL_REPO is replaced with
+	     its path. -->
+	<repository type="rpm-md" alias="quine-local" priority="1" imageinclude="false" package_gpgcheck="false">
+		<source path="dir://QUINE_LOCAL_REPO"/>
+	</repository>
+	<!-- Our apps (dnf-package-store, swap-watchdog), from the forge's
+	     `quine` RPM group, as the Home Edition's Containerfile installs
+	     them. Forgejo signs the metadata, not the packages. -->
+	<repository type="rpm-md" alias="quine" imageinclude="false" repository_gpgcheck="true" package_gpgcheck="false">
+		<source path="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine">
+			<signing key="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/repository.key"/>
+		</source>
+	</repository>
+
+	<!-- Our identity in place of Fedora's KDE one (Fedora's teams/kde.xml
+	     installs fedora-release-kde for its own profiles only):
+	     quine-linux-release provides fedora-release-identity, so dnf doesn't
+	     pull fedora-release-identity-kde-desktop. -->
+	<packages type="bootstrap" patternType="plusRecommended" profiles="Quine-KDE-Desktop-Live,Quine-KDE-Desktop-Disk">
+		<package name="quine-linux-release"/>
+		<package name="fedora-release-kde-desktop"/>
+	</packages>
+
+	<packages type="image" patternType="plusRecommended" profiles="Quine-KDE-Desktop-Live,Quine-KDE-Desktop-Disk">
+		<!-- Ours: the Home Edition's overlay, the menu tree, Flatpak setup. -->
+		<package name="quine-linux-desktop"/>
+		<package name="dnf-package-store"/>
+		<package name="swap-watchdog"/>
+		<!-- Administrator prompts that queue (admin-auth/), rebuilt from
+		     Fedora's own source with our patches. -->
+		<package name="polkit-qt6-1"/>
+		<package name="polkit-kde"/>
+		<package name="kio-admin"/>
+		<!-- Not in ours, as in the Home Edition (its Containerfile's
+		     `dnf remove`): KDE Connect, the Welcome Center. -->
+		<ignore name="kde-connect"/>
+		<ignore name="kde-connect-libs"/>
+		<ignore name="kdeconnectd"/>
+		<ignore name="plasma-welcome"/>
+		<ignore name="plasma-welcome-fedora"/>
+		<ignore name="fedora-release-identity-kde-desktop"/>
+	</packages>
+</image>

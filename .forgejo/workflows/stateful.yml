@@ -1,0 +1,73 @@
+name: Stateful Edition
+
+# Builds Quine Linux Stateful Edition (docs/STATEFUL_EDITION.md): our RPMs,
+# then KIWI's live ISO (and on request the disk image) from Fedora's KDE
+# Edition descriptions plus ours (stateful/build.sh), and uploads them to
+# MinIO as <bucket>/stateful/latest/live.iso (and disk.raw.xz), replacing
+# the last build's. x86_64 only for now: the arm64 runner's disks are
+# too small for it (docs/STATEFUL_EDITION.md, "Disk space").
+#
+# On pushes to the stateful-edition branch that touch what it's built from,
+# and by hand. Not on main: the Home Edition's builds (iso.yml) are main's.
+#
+# Secrets: MINIO_SECRET_KEY; MINIO_ACCESS_KEY is a variable or a secret.
+# Variables (optional): MINIO_ENDPOINT, MINIO_BUCKET (as iso.yml).
+on:
+  push:
+    branches: [stateful-edition]
+    paths:
+      - 'stateful/**'
+      - 'overlay/**'
+      - 'menu/**'
+      - 'admin-auth/**'
+      - '.forgejo/workflows/stateful.yml'
+  workflow_dispatch:
+    inputs:
+      disk:
+        description: 'Also build the disk image'
+        type: boolean
+        default: false
+
+concurrency:
+  group: stateful-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MINIO_BUCKET: ${{ vars.MINIO_BUCKET || 'quine-linux' }}
+  RCLONE_CONFIG_STORE_TYPE: s3
+  RCLONE_CONFIG_STORE_PROVIDER: Minio
+  RCLONE_CONFIG_STORE_ENDPOINT: ${{ vars.MINIO_ENDPOINT || 'https://s3.quineglobal.com' }}
+
+jobs:
+  build:
+    runs-on: runner-x86-linux
+    timeout-minutes: 180
+    steps:
+      - uses: https://forge.in.quineglobal.com/quine-global/mirror-actions-checkout@v4
+
+      - name: Free space
+        # As iso.yml: one job per runner, so leftovers aren't anyone's.
+        run: |
+          podman image prune -af >/dev/null || true
+          rm -rf /var/tmp/quine-stateful /var/tmp/container_images_storage*
+          df -h /var/tmp / | tail -2
+
+      - name: Build
+        run: stateful/build.sh ${{ inputs.disk && '--disk' || '' }}
+
+      - name: Upload to MinIO
+        env:
+          RCLONE_CONFIG_STORE_ACCESS_KEY_ID: ${{ vars.MINIO_ACCESS_KEY || secrets.MINIO_ACCESS_KEY }}
+          RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          rclone copyto output/stateful/Quine-Linux-Stateful-Live.iso "store:${MINIO_BUCKET}/stateful/latest/live.iso"
+          if [ -e output/stateful/Quine-Linux-Stateful-Disk.raw ]; then
+            xz -T0 -6 output/stateful/Quine-Linux-Stateful-Disk.raw
+            rclone copyto output/stateful/Quine-Linux-Stateful-Disk.raw.xz "store:${MINIO_BUCKET}/stateful/latest/disk.raw.xz"
+          fi
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf output/stateful /var/tmp/quine-stateful
+          podman image prune -af >/dev/null || true

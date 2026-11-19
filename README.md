@@ -284,6 +284,8 @@ menu/
   Internet/
     .icon               applications-internet (the folder's icon)
     Quple               com.quineglobal.Quple
+    Firefox             org.mozilla.firefox + firefox (one per line: the
+                        Flatpak, or Fedora's RPM, whichever is installed)
   Utilities/
     Central Package     io.github.kolunmi.Bazaar
   Other/

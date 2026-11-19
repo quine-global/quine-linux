@@ -146,6 +146,14 @@ tasks:
         --build-arg PAYLOAD_PULL={{.PAYLOAD_PULL}}
         -t {{.LIVE_IMAGE}} -f live/Containerfile live/
 
+  stateful:
+    desc: >-
+      Build Quine Linux Stateful Edition's live ISO (docs/STATEFUL_EDITION.md)
+      into output/stateful/, with KIWI in a privileged Fedora container.
+      DISK=1 also builds the disk image. Needs root podman and ~30 GB free.
+    cmds:
+      - sudo stateful/build.sh {{if .DISK}}--disk{{end}}
+
   build-live-iso:
     desc: >-
       Build the live ISO: boots into a Quine Linux session, with an installer.

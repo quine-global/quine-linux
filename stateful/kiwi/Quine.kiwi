@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Quine Linux Stateful Edition (docs/STATEFUL_EDITION.md): Fedora's KDE
+     Plasma Desktop Edition (its components, unchanged) plus ours
+     (quine/quine.xml). build-in-container.sh copies this file and quine/ into
+     a checkout of Fedora's kiwi-descriptions (stateful/fedora.env), so the
+     this:// paths below are Fedora's files. The version and release-version
+     are FEDORA_VERSION; build-in-container.sh checks they match. -->
+<image schemaversion="7.4" name="Quine-Linux-Stateful">
+	<description type="system">
+		<author>Quine Global</author>
+		<contact>https://linux.quineglobal.com</contact>
+		<specification>Quine Linux Stateful Edition</specification>
+	</description>
+	<preferences>
+		<version>45</version>
+		<packagemanager>dnf5</packagemanager>
+		<locale>en_US</locale>
+		<keytable>us</keytable>
+		<timezone>UTC</timezone>
+		<release-version>45</release-version>
+	</preferences>
+	<!-- Fedora's: the repositories, and what its KDE Edition is made of. -->
+	<include from="this://./repositories/core.xml"/>
+	<include from="this://./components/common.xml"/>
+	<include from="this://./components/boot.xml"/>
+	<include from="this://./components/desktops/common.xml"/>
+	<include from="this://./components/desktops/kde.xml"/>
+	<include from="this://./components/liveinstall.xml"/>
+	<include from="this://./components/users.xml"/>
+	<!-- Ours. -->
+	<include from="this://./quine/quine.xml"/>
+	<packages type="bootstrap">
+		<package name="filesystem"/>
+	</packages>
+</image>
