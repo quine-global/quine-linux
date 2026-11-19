@@ -9,6 +9,8 @@ changes.
 
 Status: **plan**. Nothing below is built yet.
 
+Today's edition, the bootc image, is the **Home Edition**.
+
 ## Upstream: how Fedora makes its KDE Edition
 
 All of these are on Fedora's forge (forge.fedoraproject.org). Pagure is
@@ -57,7 +59,7 @@ starting from Fedora's descriptions instead of Aurora's image.
 
 ## The one big difference
 
-On the image edition, the image *is* the system: every change ships in
+On the Home Edition, the image *is* the system: every change ships in
 the next image, and `bootc` swaps it in, with rollback for free.
 
 On a stateful system, **the ISO only matters on day one.** After that,
@@ -71,7 +73,7 @@ becomes a file in a package, or a package trigger.
 
 ## Our changes, one by one
 
-| Today (image edition) | Stateful Edition |
+| Today (Home Edition) | Stateful Edition |
 |---|---|
 | `overlay/` (Flatpak preinstalls and remote, kwin rules, gitconfig, journald cap, disk-cleanup, ssh/gpg agents, quine-app-updates and its launchers) | **`quine-linux-desktop` RPM**: the same files, from a spec in this repo. Most of the overlay works unchanged on plain Fedora |
 | The menu tree (`menu/`, `build-menu`) | In `quine-linux-desktop`. `build-menu` becomes a **file trigger** (`%transfiletriggerin` on `/usr/share/applications`), so the menu updates whenever a package adds an app. That matters more here, because people install RPMs all the time |
@@ -80,7 +82,7 @@ becomes a file in a package, or a package trigger.
 | layer-wizard, dnf-package-store, swap-watchdog (installed at build time only) | Our `quine` RPM repo stays **enabled on installed machines**, so they update with dnf. **layer-wizard is dropped**: it layers onto rpm-ostree, and on a stateful system you just install. dnf-package-store does that |
 | KeyMaker and Quple Flatpaks, flatpak.quineglobal.com | Unchanged |
 | cs8409 kmod, built for the image's one kernel | Kernels update on their own here, so this becomes an **akmod** (`akmod-snd-hda-codec-cs8409`), rebuilt at boot for each new kernel. With Secure Boot, akmods signs the module with a machine-local key that needs a MOK enrollment, but only on that iMac |
-| Updates: uupd, `update-confirm` / `update-rollback`, bootc rollback | **dnf offline updates** (PackageKit, which Plasma's Discover already uses on Fedora KDE): downloaded in the background, applied on restart. **Rollback: btrfs snapshots** of the root subvolume before each transaction (snapper and its dnf plugin), bootable from GRUB. That's the stateful version of "Keep this update / Roll back" |
+| Updates: uupd, `update-confirm` / `update-rollback`, bootc rollback | **As Fedora KDE does:** Discover/PackageKit offline updates, downloaded in the background and applied on restart. **No snapshots or rollback** (Fedora KDE has none), so `update-confirm`, `update-rollback` and "Keep this update / Roll back" aren't part of this edition |
 | Kickoff's update bar (`update-check` reads bootc status) | `update-check` asks PackageKit whether an offline update is ready. Same bar, different source |
 | `grow-root`, `rpm-ostree-cleanup`, ujust, brew, Universal Blue units | Dropped. KIWI's disk image grows itself (`x-systemd.growfs`), and the rest is atomic-only or Universal Blue's |
 | Live ISO: titanoboa, our MokManager fix, Anaconda web UI with the Data disk step | **KIWI's live ISO** (`KDE-Desktop-Live` plus our profile). The Data disk step stays: `anaconda-webui` rebuilt with `steps.patch`, from our repo. Fedora's signed shim and kernel boot without our MOK |
@@ -110,7 +112,7 @@ becomes a file in a package, or a package trigger.
     `registry.fedoraproject.org/fedora:<ver>` container (KIWI needs loop
     devices; podman on the NixOS runners can do `--privileged`).
   - Outputs go to MinIO under `quine-linux/stateful/`.
-  - The image edition's 3-hour build doesn't apply. A KIWI ISO is roughly
+  - The Home Edition's 3-hour build doesn't apply. A KIWI ISO is roughly
     30–60 minutes. Plasma rebuilds cost more but only run when Fedora
     updates.
 - **Rebuild bot:** a scheduled job compares Fedora's current versions of
@@ -132,34 +134,34 @@ becomes a file in a package, or a package trigger.
    that then updates with plain dnf.
 3. **Patched packages:** the rebuilt Plasma/polkit/kio-admin RPMs, repo
    priority, and the rebuild bot.
-4. **Updates and rollback:** offline updates on by default, snapper
-   snapshots, a GRUB entry to boot a snapshot, and the Kickoff update bar
+4. **Updates:** Fedora KDE's offline updates, and the Kickoff update bar
    reading PackageKit.
 5. **Installer and hardware:** the Data disk step in the stateful
    installer, the cs8409 akmod, arm64, and a release flow (`stateful-v*`
-   tags) next to the image edition's.
+   tags) next to the Home Edition's.
 
 After phase 2 there's a usable system. Phases 3–5 bring it to parity.
 
 ## A bonus: one source for both editions
 
-Once our changes are RPMs, the image edition could install the same
+Once our changes are RPMs, the Home Edition could install the same
 `quine-linux-desktop` and rebuilt packages instead of copying `overlay/`
 and `.so` files into the image. Both editions would then get each fix from
 one place. That isn't required for the Stateful Edition, but packaging
 choices should leave the door open.
 
+## Decided
+
+- Today's edition is the **Home Edition** (its os-release `VARIANT` and
+  download names follow when the Stateful Edition ships).
+- **Updates as Fedora KDE does them**, with no snapshots or rollback.
+
 ## Open questions
 
-- **What's the image edition called** next to "Stateful Edition"? (Plain
-  "Quine Linux", "Image Edition", "Atomic Edition"…) It decides download
-  names, os-release `VARIANT`, and the website.
-- **Snapshots and rollback** (phase 4): snapper on by default, or plain
-  Fedora behaviour (no rollback)?
 - **Apps as RPMs or Flatpaks:** Fedora KDE ships Firefox and LibreOffice
-  as RPMs. Keep Fedora's RPMs, or match the image edition's Flatpaks
+  as RPMs. Keep Fedora's RPMs, or match the Home Edition's Flatpaks
   (Firefox, Falkon, Audacity…)?
 - **Fedora version:** the current stable release (like the image edition's
   "bleeding edge" packages, which dnf gives anyway), not Rawhide?
-- **One forge RPM group or two:** do the image edition's `quine` group and
+- **One forge RPM group or two:** do the Home Edition's `quine` group and
   the stateful packages share one repository?
