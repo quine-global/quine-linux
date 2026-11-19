@@ -41,21 +41,14 @@ git -C "$desc" checkout -q FETCH_HEAD
 cp "$src/stateful/kiwi/Quine.kiwi" "$desc/"
 cp -r "$src/stateful/kiwi/quine" "$desc/quine"
 sed -i "s|QUINE_LOCAL_REPO|$repo|" "$desc/quine/quine.xml"
-# Our apps' repo, on the forge, is reachable from our tailnet only. Its
-# metadata is signed (not its packages, which the metadata pins by
-# checksum): checked here, as KIWI's dnf can't.
-quine=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine
-if curl -fsS --max-time 20 -o /work/quine.key "${quine%/quine}/repository.key"; then
-  curl -fsS -o /work/repomd.xml "$quine/repodata/repomd.xml"
-  curl -fsS -o /work/repomd.xml.asc "$quine/repodata/repomd.xml.asc"
-  if grep -q 'BEGIN PGP' /work/quine.key; then gpg --batch --dearmor </work/quine.key >/work/quine.gpg
-  else cp /work/quine.key /work/quine.gpg; fi
-  gpgv --keyring /work/quine.gpg /work/repomd.xml.asc /work/repomd.xml
-else
-  echo "NOTE: forge.in.quineglobal.com isn't reachable from here (it's on Quine's tailnet):" >&2
-  echo "      building without dnf-package-store and swap-watchdog." >&2
-  sed -i '/<!-- quine-repo:begin -->/,/<!-- quine-repo:end -->/d' "$desc/quine/quine.xml"
-fi
+# Our apps' repo: its metadata is signed (not its packages, which the
+# metadata pins by checksum). Checked here, as KIWI's dnf can't.
+quine=https://packages.quineglobal.com/quine-linux/rpm
+curl -fsS --retry 3 -o /work/quine.key "$quine/repository.key"
+curl -fsS --retry 3 -o /work/repomd.xml "$quine/repodata/repomd.xml"
+curl -fsS --retry 3 -o /work/repomd.xml.asc "$quine/repodata/repomd.xml.asc"
+gpg --batch --dearmor </work/quine.key >/work/quine.gpg
+gpgv --keyring /work/quine.gpg /work/repomd.xml.asc /work/repomd.xml
 ! grep -q 'QUINE_' "$desc/quine/quine.xml"
 # Ours runs at the end of Fedora's config.sh, which ends with `exit 0`.
 [ "$(tail -n 1 "$desc/config.sh")" = "exit 0" ] ||

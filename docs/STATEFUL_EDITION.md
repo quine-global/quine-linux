@@ -53,11 +53,11 @@ Checked so far, in a `fedora:45` container:
 **Not yet:** a whole KIWI build, or booting the result.
 
 **Known gaps before anyone installs it:**
-- **The `quine` repo is tailnet-only** (forge.in.quineglobal.com). A build
-  off the tailnet leaves out our apps (dnf-package-store, swap-watchdog),
-  and installed machines skip the repo (`skip_if_unavailable`). It needs a
-  public name for the forge's RPM packages (as registry.quineglobal.com is
-  for images), and quine-linux-release's `quine.repo` should point there.
+- **Our apps' repo is public** now:
+  `https://packages.quineglobal.com/quine-linux/rpm/`. That's the forge's
+  `quine` group through mainframe's nginx (petersweb-infra `edge.nix`):
+  index, packages and key only. Builds and installed machines both use it.
+  The rebuilt packages aren't in it yet (next item).
 - **The rebuilt packages aren't published anywhere yet** (phase 3). An
   installed system keeps the ISO's patched polkit-kde and the others only
   until Fedora updates them.

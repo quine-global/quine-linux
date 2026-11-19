@@ -23,18 +23,15 @@
 	<repository type="rpm-md" alias="quine-local" priority="1" imageinclude="false" package_gpgcheck="false">
 		<source path="dir://QUINE_LOCAL_REPO"/>
 	</repository>
-	<!-- Our apps (dnf-package-store, swap-watchdog), from the forge's
-	     `quine` RPM group, as the Home Edition's Containerfile installs
-	     them. Forgejo signs the metadata, not the packages. The forge is
-	     tailnet-only: when it can reach it, build-in-container.sh checks
-	     the repository's signed metadata with gpg itself (KIWI's dnf can't:
-	     "Signing key not found", runs 118 and 119); otherwise it deletes the
-	     quine-repo blocks (the repo and its packages) and says so. -->
-	<!-- quine-repo:begin -->
-	<repository type="rpm-md" alias="quine" imageinclude="false" repository_gpgcheck="false" package_gpgcheck="false">
-		<source path="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine"/>
+	<!-- Our apps (dnf-package-store, swap-watchdog), from Quine Linux's
+	     public repo (the forge's `quine` RPM group, as the Home Edition's
+	     Containerfile installs them). Forgejo signs the metadata, not the
+	     packages: build-in-container.sh checks that signature with gpg
+	     itself, as KIWI's dnf can't ("Signing key not found", runs 118 and
+	     119). -->
+	<repository type="rpm-md" alias="quine-linux" imageinclude="false" repository_gpgcheck="false" package_gpgcheck="false">
+		<source path="https://packages.quineglobal.com/quine-linux/rpm/"/>
 	</repository>
-	<!-- quine-repo:end -->
 
 	<!-- Our identity in place of Fedora's KDE one (Fedora's teams/kde.xml
 	     installs fedora-release-kde for its own profiles only):
@@ -48,10 +45,8 @@
 	<packages type="image" patternType="plusRecommended" profiles="Quine-KDE-Desktop-Live,Quine-KDE-Desktop-Disk">
 		<!-- Ours: the Home Edition's overlay, the menu tree, Flatpak setup. -->
 		<package name="quine-linux-desktop"/>
-		<!-- quine-repo:begin -->
 		<package name="dnf-package-store"/>
 		<package name="swap-watchdog"/>
-		<!-- quine-repo:end -->
 		<!-- Administrator prompts that queue (admin-auth/), rebuilt from
 		     Fedora's own source with our patches. -->
 		<package name="polkit-qt6-1"/>

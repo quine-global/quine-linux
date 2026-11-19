@@ -1,13 +1,14 @@
-# Quine Linux's own apps (dnf-package-store, swap-watchdog), from the forge's
-# `quine` RPM group. Forgejo signs the metadata, not the packages, so dnf
-# checks the metadata, which pins each package's checksum. The forge is on
-# Quine's tailnet only for now: elsewhere dnf skips this repo instead of
-# failing (skip_if_unavailable).
-[quine]
+# Quine Linux's own apps (dnf-package-store, swap-watchdog), from Quine
+# Linux's repo on packages.quineglobal.com: the forge's `quine` RPM group,
+# served publicly (petersweb-infra, nixos/edge.nix). Forgejo signs the
+# metadata, not the packages, so dnf checks the metadata, which pins each
+# package's checksum. If the repo is ever down, dnf skips it rather than
+# holding up Fedora's updates (skip_if_unavailable).
+[quine-linux]
 name=Quine Linux
-baseurl=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine
+baseurl=https://packages.quineglobal.com/quine-linux/rpm/
 enabled=1
 skip_if_unavailable=True
 gpgcheck=0
 repo_gpgcheck=1
-gpgkey=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/repository.key
+gpgkey=https://packages.quineglobal.com/quine-linux/rpm/repository.key

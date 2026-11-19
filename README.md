@@ -127,9 +127,10 @@ task stateful            # or: stateful/build.sh
   patched administrator-prompt packages, then runs KIWI on Fedora's own KDE
   Edition descriptions (pinned in `stateful/fedora.env`) plus ours
   (`stateful/kiwi/`), all in a privileged `fedora` container.
-- **Outside Quine's network**, our own apps (DNF Package Store, Force Quit
-  Monitor) aren't included: their repository is private for now. The build
-  says so and carries on.
+- **Our own apps** (DNF Package Store, Force Quit Monitor) come from Quine
+  Linux's public repo, `https://packages.quineglobal.com/quine-linux/rpm/`.
+  Installed systems keep it enabled (`/etc/yum.repos.d/quine.repo`), so
+  they update with dnf alongside Fedora's packages.
 - `CONTAINER_RUNTIME=docker`, `WORK_DIR`, `OUTPUT_DIR`: see
   `stateful/build.sh`.
 
