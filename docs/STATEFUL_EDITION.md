@@ -132,10 +132,13 @@ becomes a file in a package, or a package trigger.
   runner's 54 GB root disk is the tight one: KIWI's work directory should
   go on its 49 GB containers disk.
 - **Plasma rebuilds:** a few GB of build tree, freed after each one.
-- **Kept, in MinIO:** ~6 GB per build per architecture (the ISO, plus the
-  compressed disk image). That's on top of the Home Edition's, so the
-  retention policy decides the total: keeping the last 5 builds of both
-  architectures is ~60 GB.
+- **Kept, in MinIO:** as for the Home Edition, each build overwrites
+  `latest`: ~6 GB per architecture (the ISO, plus the compressed disk
+  image), so ~12 GB in all, plus ~12 GB per release.
+- **No container images.** KIWI's output is the ISO and the disk image, so
+  the forge's container registry, which is where the Home Edition's disk
+  space goes (every build's image is kept, and the weekly Forgejo dump
+  includes it), doesn't grow.
 - **Kept, in the forge's RPM registry:** under 1 GB per architecture for a
   few versions of our rebuilt packages.
 - **VM 108 on zeus:** 64 GB thin-provisioned, ~10–15 GB really used.
