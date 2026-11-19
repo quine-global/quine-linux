@@ -37,9 +37,10 @@ plan.
   - then the ISO with `kiwi-ng` (and the disk image with `--disk`).
 - `stateful/build.sh` runs that in a privileged `fedora:45` container.
   Locally: `task stateful` (root podman, ~30 GB free).
-- `.forgejo/workflows/stateful.yml`: on pushes to this branch, and by hand
-  (with an option for the disk image). x86_64 only. Uploads to MinIO
-  `quine-linux/stateful/latest/`.
+- `.forgejo/workflows/stateful.yml`: checks that it builds, on pushes that
+  touch it and by hand. x86_64 only. **Nothing is published:** the
+  Stateful Edition has no downloads, people build it themselves (README
+  "Stateful Edition: build it yourself").
 
 Checked so far, in a `fedora:45` container:
 - both RPMs build;
@@ -52,8 +53,9 @@ Checked so far, in a `fedora:45` container:
 **Not yet:** a whole KIWI build, or booting the result.
 
 **Known gaps before anyone installs it:**
-- **The `quine` repo is tailnet-only** (forge.in.quineglobal.com). An
-  installed machine off the tailnet can't update our apps. It needs a
+- **The `quine` repo is tailnet-only** (forge.in.quineglobal.com). A build
+  off the tailnet leaves out our apps (dnf-package-store, swap-watchdog),
+  and installed machines skip the repo (`skip_if_unavailable`). It needs a
   public name for the forge's RPM packages (as registry.quineglobal.com is
   for images), and quine-linux-release's `quine.repo` should point there.
 - **The rebuilt packages aren't published anywhere yet** (phase 3). An
@@ -173,7 +175,8 @@ becomes a file in a package, or a package trigger.
   - KIWI builds the ISO and disk image in a privileged
     `registry.fedoraproject.org/fedora:<ver>` container (KIWI needs loop
     devices; podman on the NixOS runners can do `--privileged`).
-  - Outputs go to MinIO under `quine-linux/stateful/`.
+  - Nothing is published: CI only checks that it builds. Anyone who
+    wants the Stateful Edition builds it with `task stateful`.
   - The Home Edition's 3-hour build doesn't apply. A KIWI ISO is roughly
     30–60 minutes. Plasma rebuilds cost more but only run when Fedora
     updates.
@@ -194,9 +197,7 @@ becomes a file in a package, or a package trigger.
   runner's 54 GB root disk is the tight one: KIWI's work directory should
   go on its 49 GB containers disk.
 - **Plasma rebuilds:** a few GB of build tree, freed after each one.
-- **Kept, in MinIO:** as for the Home Edition, each build overwrites
-  `latest`: ~6 GB per architecture (the ISO, plus the compressed disk
-  image), so ~12 GB in all, plus ~12 GB per release.
+- **Kept, in MinIO: nothing.** No ISOs or disk images are published.
 - **No container images.** KIWI's output is the ISO and the disk image, so
   the forge's container registry, which is where the Home Edition's disk
   space goes (every build's image is kept, and the weekly Forgejo dump
@@ -234,6 +235,9 @@ one place. That isn't required for the Stateful Edition, but packaging
 choices should leave the door open.
 
 ## Decided
+
+- **No downloads:** people build the Stateful Edition themselves
+  (`task stateful`); CI only checks that it builds.
 
 - Today's edition is the **Home Edition** (its os-release `VARIANT` and
   download names follow when the Stateful Edition ships).

@@ -102,6 +102,37 @@ a Forgejo token (scope `write:repository`) of an account that may run
 Actions in those repos and this one, since the automatic token only reaches
 this repo.
 
+## Stateful Edition: build it yourself
+
+The **Stateful Edition** is Quine Linux built like Fedora's KDE Plasma
+Desktop Edition: an ordinary Fedora system that updates with dnf, rather
+than the Home Edition's image ([docs/STATEFUL_EDITION.md](docs/STATEFUL_EDITION.md)).
+It has no downloads. You build the installer ISO yourself:
+
+```
+git clone https://github.com/quine-global/quine-linux.git
+cd quine-linux
+task stateful            # or: stateful/build.sh
+```
+
+- **Needs:** Linux with podman or docker (it asks for sudo for podman), or
+  macOS with Docker Desktop or a rootful podman machine
+  (`podman machine set --rootful`). About 30 GB free, and about an hour.
+- **Result:** `output/stateful/Quine-Linux-Stateful-Live.iso`, for your
+  machine's architecture. Write it to a USB stick and boot it: it's a live
+  session with the installer. `task stateful DISK=1` also makes a disk
+  image (`Quine-Linux-Stateful-Disk.raw`) to write straight to a disk or
+  boot in a VM.
+- **What it does:** builds our RPMs (`stateful/packaging/`) and the
+  patched administrator-prompt packages, then runs KIWI on Fedora's own KDE
+  Edition descriptions (pinned in `stateful/fedora.env`) plus ours
+  (`stateful/kiwi/`), all in a privileged `fedora` container.
+- **Outside Quine's network**, our own apps (DNF Package Store, Force Quit
+  Monitor) aren't included: their repository is private for now. The build
+  says so and carries on.
+- `CONTAINER_RUNTIME=docker`, `WORK_DIR`, `OUTPUT_DIR`: see
+  `stateful/build.sh`.
+
 ## Releasing
 
 On the forge: **Actions → Release → Run workflow**. It works out the next
