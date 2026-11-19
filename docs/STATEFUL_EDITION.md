@@ -56,7 +56,9 @@ Checked so far, in a `fedora:45` container:
 - **Our apps' repo is public** now:
   `https://packages.quineglobal.com/quine-linux/rpm/`. That's the forge's
   `quine` group through mainframe's nginx (petersweb-infra `edge.nix`):
-  index, packages and key only. Builds and installed machines both use it.
+  index, packages and key only, behind a basic-auth login that's published
+  on purpose (`quine` / `linux`, against crawlers). Builds and installed
+  machines both use it.
   The rebuilt packages aren't in it yet (next item).
 - **The rebuilt packages aren't published anywhere yet** (phase 3). An
   installed system keeps the ISO's patched polkit-kde and the others only

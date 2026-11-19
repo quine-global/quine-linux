@@ -28,9 +28,10 @@
 	     Containerfile installs them). Forgejo signs the metadata, not the
 	     packages: build-in-container.sh checks that signature with gpg
 	     itself, as KIWI's dnf can't ("Signing key not found", runs 118 and
-	     119). -->
+	     119). Its login (published on purpose, against crawlers) goes in the
+	     URL. -->
 	<repository type="rpm-md" alias="quine-linux" imageinclude="false" repository_gpgcheck="false" package_gpgcheck="false">
-		<source path="https://packages.quineglobal.com/quine-linux/rpm/"/>
+		<source path="https://quine:linux@packages.quineglobal.com/quine-linux/rpm/"/>
 	</repository>
 
 	<!-- Our identity in place of Fedora's KDE one (Fedora's teams/kde.xml

@@ -44,9 +44,12 @@ sed -i "s|QUINE_LOCAL_REPO|$repo|" "$desc/quine/quine.xml"
 # Our apps' repo: its metadata is signed (not its packages, which the
 # metadata pins by checksum). Checked here, as KIWI's dnf can't.
 quine=https://packages.quineglobal.com/quine-linux/rpm
-curl -fsS --retry 3 -o /work/quine.key "$quine/repository.key"
-curl -fsS --retry 3 -o /work/repomd.xml "$quine/repodata/repomd.xml"
-curl -fsS --retry 3 -o /work/repomd.xml.asc "$quine/repodata/repomd.xml.asc"
+# The login is published on purpose (packages.quineglobal.com keeps crawlers
+# out with it; petersweb-infra edge.nix).
+login=(-u quine:linux)
+curl -fsS --retry 3 "${login[@]}" -o /work/quine.key "$quine/repository.key"
+curl -fsS --retry 3 "${login[@]}" -o /work/repomd.xml "$quine/repodata/repomd.xml"
+curl -fsS --retry 3 "${login[@]}" -o /work/repomd.xml.asc "$quine/repodata/repomd.xml.asc"
 gpg --batch --dearmor </work/quine.key >/work/quine.gpg
 gpgv --keyring /work/quine.gpg /work/repomd.xml.asc /work/repomd.xml
 ! grep -q 'QUINE_' "$desc/quine/quine.xml"
