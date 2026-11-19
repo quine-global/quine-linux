@@ -26,14 +26,13 @@
 	<!-- Our apps (dnf-package-store, swap-watchdog), from the forge's
 	     `quine` RPM group, as the Home Edition's Containerfile installs
 	     them. Forgejo signs the metadata, not the packages. The forge is
-	     tailnet-only: build-in-container.sh fetches its key when it can
-	     reach it, and otherwise deletes the quine-repo blocks (the repo and
-	     its packages) and says so. -->
+	     tailnet-only: when it can reach it, build-in-container.sh checks
+	     the repository's signed metadata with gpg itself (KIWI's dnf can't:
+	     "Signing key not found", runs 118 and 119); otherwise it deletes the
+	     quine-repo blocks (the repo and its packages) and says so. -->
 	<!-- quine-repo:begin -->
-	<repository type="rpm-md" alias="quine" imageinclude="false" repository_gpgcheck="true" package_gpgcheck="false">
-		<source path="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine">
-			<signing key="file://QUINE_REPO_KEY"/>
-		</source>
+	<repository type="rpm-md" alias="quine" imageinclude="false" repository_gpgcheck="false" package_gpgcheck="false">
+		<source path="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine"/>
 	</repository>
 	<!-- quine-repo:end -->
 

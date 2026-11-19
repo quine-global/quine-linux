@@ -17,7 +17,7 @@ for v in version release-version; do
 done
 
 dnf install -y --setopt=install_weak_deps=False \
-  kiwi kiwi-systemdeps distribution-gpg-keys createrepo_c git-core dnf5-plugins curl
+  kiwi kiwi-systemdeps distribution-gpg-keys createrepo_c git-core dnf5-plugins curl gnupg2
 
 # --- Our RPMs, into a local repository KIWI installs from.
 repo=/work/repo
@@ -41,10 +41,16 @@ git -C "$desc" checkout -q FETCH_HEAD
 cp "$src/stateful/kiwi/Quine.kiwi" "$desc/"
 cp -r "$src/stateful/kiwi/quine" "$desc/quine"
 sed -i "s|QUINE_LOCAL_REPO|$repo|" "$desc/quine/quine.xml"
-# Our apps' repo, on the forge, is reachable from our tailnet only.
-key=/work/quine-repo.key
-if curl -fsS --max-time 20 -o "$key" https://forge.in.quineglobal.com/api/packages/quine-global/rpm/repository.key; then
-  sed -i "s|QUINE_REPO_KEY|$key|" "$desc/quine/quine.xml"
+# Our apps' repo, on the forge, is reachable from our tailnet only. Its
+# metadata is signed (not its packages, which the metadata pins by
+# checksum): checked here, as KIWI's dnf can't.
+quine=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine
+if curl -fsS --max-time 20 -o /work/quine.key "${quine%/quine}/repository.key"; then
+  curl -fsS -o /work/repomd.xml "$quine/repodata/repomd.xml"
+  curl -fsS -o /work/repomd.xml.asc "$quine/repodata/repomd.xml.asc"
+  if grep -q 'BEGIN PGP' /work/quine.key; then gpg --batch --dearmor </work/quine.key >/work/quine.gpg
+  else cp /work/quine.key /work/quine.gpg; fi
+  gpgv --keyring /work/quine.gpg /work/repomd.xml.asc /work/repomd.xml
 else
   echo "NOTE: forge.in.quineglobal.com isn't reachable from here (it's on Quine's tailnet):" >&2
   echo "      building without dnf-package-store and swap-watchdog." >&2
