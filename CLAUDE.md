@@ -30,6 +30,10 @@ other apps. This file is what you'd otherwise rediscover the hard way.
 - **Kickoff** (the start menu) is rebuilt from our plasma-desktop fork,
   branch `quine-v<Plasma version>`, which the fork's rebase workflow makes
   for each new Plasma. If it hasn't, the build stops and says so.
+- **The start menu's contents** are `menu/`, a directory tree: folders are
+  menu folders, files are apps (named as the file, holding the desktop file
+  ID). It replaces Plasma's menu entirely (README "The menu tree"); to move,
+  rename or hide an app, change the tree, never sed an entry.
 - **libtaskmanager** (the task manager's models, in plasma-workspace) is
   rebuilt with `taskmanager/startup-feedback.patch`, so the launch spinner
   follows the app's systemd unit (README "Launch feedback"). `taskmanager/

@@ -1,0 +1,234 @@
+#!/usr/lib/quine-linux/python/bin/python3
+"""Makes the start menu from the menu tree (README "The menu tree").
+
+  build-menu [--tree DIR] [--root DIR]
+
+The tree (the repo's menu/, in the image at /usr/share/quine-linux/menu):
+
+  Internet/                 a folder in the menu, named as the directory
+    .icon                   its icon (an icon name)
+    Quple                   an app, named as the file; the file holds the
+                            app's desktop file ID (com.quineglobal.Quple)
+  Other/.everything-else    this folder gets every app placed nowhere else
+  .hidden                   desktop file IDs in no folder and not found by
+                            search (NoDisplay=true)
+
+The tree is the whole menu: Plasma's menu file is replaced by one listing
+exactly these folders and apps, and an app's name in the tree becomes its
+name (menu, search, task manager). Writes, under --root (default /):
+
+  etc/xdg/menus/plasma-applications.menu     the menu (Kickoff reads it)
+  usr/share/desktop-directories/quine-menu-*.directory   folder names, icons
+  usr/share/applications/*.desktop           names set, hidden apps hidden
+
+Flatpak apps aren't in the image: quine-app-updates applies the same names
+and .hidden to their menu entries when they're installed. Run again after
+installing more apps into the image (live/build.sh does, for the installer).
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+from gi.repository import GLib
+
+DESKTOP_ENTRY = "Desktop Entry"
+
+
+class Folder:
+    def __init__(self, path, name):
+        self.path, self.name = path, name
+        self.icon = None
+        self.everything_else = False
+        self.apps = []  # (name, desktop file ID)
+        self.folders = []
+
+
+def read_id(path):
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return line.removesuffix(".desktop") + ".desktop"
+    sys.exit(f"build-menu: {path}: no desktop file ID in it")
+
+
+def read_folder(path, name, errors):
+    folder = Folder(path, name)
+    for child in sorted(path.iterdir()):
+        if child.name == ".icon":
+            folder.icon = child.read_text().strip()
+        elif child.name == ".everything-else":
+            folder.everything_else = True
+        elif child.name == ".hidden" and name is None:
+            pass  # read by read_tree
+        elif child.name.startswith("."):
+            errors.append(f"{child}: not something the tree knows (.icon, .everything-else, .hidden at the top)")
+        elif child.is_dir():
+            folder.folders.append(read_folder(child, child.name, errors))
+        else:
+            folder.apps.append((child.name, read_id(child)))
+    if name is not None and not folder.icon:
+        errors.append(f"{path}: no .icon")
+    return folder
+
+
+def walk(folder):
+    yield folder
+    for sub in folder.folders:
+        yield from walk(sub)
+
+
+def read_tree(path):
+    errors = []
+    root = read_folder(path, None, errors)
+    hidden = set()
+    if (path / ".hidden").exists():
+        for line in (path / ".hidden").read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                hidden.add(line.removesuffix(".desktop") + ".desktop")
+
+    names = {}
+    for folder in walk(root):
+        for name, app in folder.apps:
+            if names.setdefault(app, name) != name:
+                errors.append(f"{app} is both “{names[app]}” and “{name}”: one name per app")
+            if app in hidden:
+                errors.append(f"{app} is in .hidden and in {folder.path}")
+    catch_alls = [f.path for f in walk(root) if f.everything_else]
+    if len(catch_alls) > 1:
+        errors.append(f".everything-else in more than one folder: {', '.join(map(str, catch_alls))}")
+    if errors:
+        sys.exit("build-menu: the menu tree has problems:\n  " + "\n  ".join(errors))
+    return root, names, hidden
+
+
+def directory_file(folder, tree):
+    rel = folder.path.relative_to(tree).as_posix()
+    return "quine-menu-" + re.sub(r"[^A-Za-z0-9]+", "_", rel) + ".directory"
+
+
+def menu_xml(folder, tree, depth=1):
+    pad = "  " * depth
+    out = []
+    if folder.name is not None:
+        out.append(f"{pad[:-2]}<Menu>")
+        out.append(f"{pad}<Name>{escape(folder.name)}</Name>")
+        out.append(f"{pad}<Directory>{directory_file(folder, tree)}</Directory>")
+    if folder.everything_else:
+        out.append(f"{pad}<OnlyUnallocated/>")
+        out.append(f"{pad}<Include><All/></Include>")
+    elif folder.apps:
+        out.append(f"{pad}<Include>")
+        out += [f"{pad}  <Filename>{escape(app)}</Filename>" for _, app in folder.apps]
+        out.append(f"{pad}</Include>")
+    for sub in folder.folders:
+        out += menu_xml(sub, tree, depth + 1)
+    if folder.name is not None:
+        out.append(f"{pad[:-2]}</Menu>")
+    return out
+
+
+def get_string(entry, group, key):
+    try:
+        return entry.get_string(group, key)
+    except GLib.Error:
+        return None
+
+
+def apply_to_entries(applications, names, hidden):
+    """Names and NoDisplay into the image's menu entries. Returns the IDs of
+    entries the menu would show that the tree doesn't mention."""
+    unplaced, found = [], set()
+    for path in sorted(applications.rglob("*.desktop")) if applications.is_dir() else []:
+        app = path.relative_to(applications).as_posix().replace("/", "-")
+        entry = GLib.KeyFile()
+        try:
+            entry.load_from_file(str(path), GLib.KeyFileFlags.KEEP_COMMENTS | GLib.KeyFileFlags.KEEP_TRANSLATIONS)
+        except GLib.Error as err:
+            print(f"build-menu: {path}: {err}", file=sys.stderr)
+            continue
+        found.add(app)
+        changed = False
+        if app in hidden and get_string(entry, DESKTOP_ENTRY, "NoDisplay") != "true":
+            entry.set_boolean(DESKTOP_ENTRY, "NoDisplay", True)
+            changed = True
+        name = names.get(app)
+        if name and get_string(entry, DESKTOP_ENTRY, "Name") != name:
+            keys, _ = entry.get_keys(DESKTOP_ENTRY)
+            for key in keys:
+                if key.startswith("Name["):
+                    entry.remove_key(DESKTOP_ENTRY, key)  # translations of the old name
+            entry.set_string(DESKTOP_ENTRY, "Name", name)
+            changed = True
+        if changed:
+            entry.save_to_file(str(path))
+            print(f"build-menu: {app}: " + ("hidden" if app in hidden else f"named “{name}”"))
+        only = (get_string(entry, DESKTOP_ENTRY, "OnlyShowIn") or "KDE").split(";")
+        never = (get_string(entry, DESKTOP_ENTRY, "NotShowIn") or "").split(";")
+        shown = (
+            get_string(entry, DESKTOP_ENTRY, "Type") == "Application"
+            and get_string(entry, DESKTOP_ENTRY, "NoDisplay") != "true"
+            and get_string(entry, DESKTOP_ENTRY, "Hidden") != "true"
+            and "KDE" in only
+            and "KDE" not in never
+        )
+        if shown and app not in names and app not in hidden:
+            unplaced.append(app)
+    return unplaced, found
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--tree", type=Path, default=Path("/usr/share/quine-linux/menu"))
+    parser.add_argument("--root", type=Path, default=Path("/"))
+    args = parser.parse_args()
+
+    root, names, hidden = read_tree(args.tree)
+
+    menus = args.root / "etc/xdg/menus"
+    directories = args.root / "usr/share/desktop-directories"
+    menus.mkdir(parents=True, exist_ok=True)
+    directories.mkdir(parents=True, exist_ok=True)
+    for old in directories.glob("quine-menu-*.directory"):
+        old.unlink()
+    for folder in walk(root):
+        if folder.name is not None:
+            (directories / directory_file(folder, args.tree)).write_text(
+                f"[Desktop Entry]\nType=Directory\nName={folder.name}\nIcon={folder.icon}\n"
+            )
+
+    lines = [
+        '<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"',
+        ' "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">',
+        "<!-- Made by /usr/libexec/quine-linux/build-menu from the menu tree,",
+        "     /usr/share/quine-linux/menu (quine-linux's menu/): change that, not this. -->",
+        "<Menu>",
+        "  <Name>Applications</Name>",
+        "  <Directory>kf5-main.directory</Directory>",
+        "  <DefaultAppDirs/>",
+        "  <DefaultDirectoryDirs/>",
+        *menu_xml(root, args.tree),
+        "  <!-- The user's own changes, from the Menu Editor. -->",
+        "  <MergeFile>applications-kmenuedit.menu</MergeFile>",
+        "</Menu>",
+    ]
+    (menus / "plasma-applications.menu").write_text("\n".join(lines) + "\n")
+
+    unplaced, found = apply_to_entries(args.root / "usr/share/applications", names, hidden)
+    if unplaced:
+        print(
+            "build-menu: in no folder of the menu tree, so in .everything-else's: "
+            + ", ".join(unplaced)
+            + " (place them in menu/, or list them in menu/.hidden)",
+            file=sys.stderr,
+        )
+    elsewhere = sorted(set(names) - found)
+    if elsewhere:
+        print("build-menu: not in this image (Flatpaks, or installed later): " + ", ".join(elsewhere))
+
+
+if __name__ == "__main__":
+    main()

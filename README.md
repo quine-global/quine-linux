@@ -273,6 +273,47 @@ stage). Our changes:
   Bazaar", which opens Bazaar searching for the same words
   (`flatpak run io.github.kolunmi.Bazaar --search-for=…`).
 
+### The menu tree
+
+`menu/` is the start menu, as directories: each directory is a folder in
+Kickoff and each file in it an app, named as the file, holding the app's
+desktop file ID. `tree -a menu` shows the whole menu.
+
+```
+menu/
+  Internet/
+    .icon               applications-internet (the folder's icon)
+    Quple               com.quineglobal.Quple
+  Utilities/
+    Central Package     io.github.kolunmi.Bazaar
+  Other/
+    .everything-else    every app placed nowhere else
+  .hidden               IDs in no folder and not found by search
+```
+
+- **It's the whole menu.** At build time
+  `overlay/usr/libexec/quine-linux/build-menu` replaces Plasma's menu file
+  (`/etc/xdg/menus/plasma-applications.menu`) with one that lists exactly
+  these folders and apps, and writes each folder's name and icon
+  (`/usr/share/desktop-directories/quine-menu-*.directory`). Apps' own
+  `Categories` don't place them any more.
+- **The file's name is the app's name**, in the menu, KRunner and the task
+  manager: build-menu sets `Name` in the image's entries
+  (`/usr/share/applications`), and quine-app-updates in Flatpak apps'
+  entries as they're installed (the tree is in the image, at
+  `/usr/share/quine-linux/menu`). One app can be in two folders, under
+  one name.
+- **Apps the tree doesn't mention** (what users install, anything new in an
+  update) go to the folder with `.everything-else`. The build lists the
+  image's own unplaced apps: place them, or add them to `.hidden`.
+- **Hidden** apps get `NoDisplay=true`: not in the menu or search, but they
+  still open files and run by command.
+- **Users' own changes** (Menu Editor) still apply on top.
+- Folder names aren't translated: they're the directories' names.
+- An app in the tree that isn't installed (a Flatpak before first boot, the
+  installer outside the live ISO) just isn't shown; `live/build.sh` runs
+  build-menu again after adding the installer.
+
 ## Launch feedback
 
 Plasma shows a starting app as a spinning icon in the task manager, and stock
@@ -355,11 +396,11 @@ system's own update (uupd) and nothing runs in the background. All of it is
   `XDG_DATA_DIRS` (`/usr/lib/systemd/user-environment-generators/61-quine-app-launchers`,
   `/etc/profile.d/quine-app-launchers.sh`), so the menu, KRunner and pinned
   launchers use them. `flatpak run` typed in a terminal goes around it.
-- **Renamed apps.** The same copies give some apps another name in the
-  menu (`RENAMES` in the script): Bazaar shows as **Central Package**.
-  Only the menu entry's `Name` changes (its translations dropped); the
-  app's own windows and the Kickoff search row "Install … from Bazaar"
-  keep the old name.
+- **Names from the menu tree.** The same copies take each app's name in
+  the [menu tree](#the-menu-tree) (Bazaar is **Central Package** there),
+  and the tree's `.hidden` hides an app. Only the menu entry's `Name`
+  changes (its translations dropped); the app's own windows and the
+  Kickoff search row "Install … from Bazaar" keep the old name.
 - **On launch:** if the app is already running, nothing. Otherwise one
   `flatpak remote-info` against its remote, at most 4 seconds: no newer
   commit, offline, or slow, and the installed version opens at once.

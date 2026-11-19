@@ -1,0 +1,4 @@
+# Apps in no folder and not found by search (NoDisplay=true): one desktop
+# file ID per line. They still open files ("Open With") and run by command.
+dev.getaurora.offline-docs
+dev.getaurora.discussions

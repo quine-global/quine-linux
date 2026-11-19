@@ -46,12 +46,11 @@ LAUNCHERS = {
 }
 SELF = "/usr/bin/quine-app-updates"
 
-# Apps shown under another name in the menu (and KRunner, the task manager):
-# only the entry's Name changes, in every language; the app itself, its ID
-# and its own windows keep theirs.
-RENAMES = {
-    "io.github.kolunmi.Bazaar": "Central Package",
-}
+# The menu tree (README "The menu tree"; build-menu makes the menu from it):
+# an app's name there is its entry's Name (in the menu, KRunner, the task
+# manager), and the IDs in its .hidden are hidden. Only the entry changes,
+# in every language; the app itself, its ID and its own windows keep theirs.
+MENU_TREE = Path("/usr/share/quine-linux/menu")
 
 # Sandbox permissions live in these metadata groups; anything an update adds
 # to them is asked about first.
@@ -266,10 +265,36 @@ def get_string(entry, group, key):
         return None
 
 
-def rewrite(desktop_file):
+def read_menu_tree():
+    """({app ID: its name in the tree}, {hidden app IDs}), IDs without
+    .desktop. The same rules as build-menu, which checks the tree at build
+    time."""
+    names, hidden = {}, set()
+    if not MENU_TREE.is_dir():
+        return names, hidden
+
+    def ids(path):
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                yield line.removesuffix(".desktop")
+
+    for path in MENU_TREE.rglob("*"):
+        if path.is_file() and not path.name.startswith("."):
+            for app in ids(path):
+                names[app] = path.name
+                break
+    hidden_file = MENU_TREE / ".hidden"
+    if hidden_file.is_file():
+        hidden.update(ids(hidden_file))
+    return names, hidden
+
+
+def rewrite(desktop_file, menu_tree):
     """The menu entry, parsed (GLib's key file parser, which GIO itself reads
     menu entries with) and changed: each `flatpak run` command goes through
-    `launch`, D-Bus activation is off, and RENAMES applies. Comments, order and
+    `launch`, D-Bus activation is off, and the menu tree's name and .hidden
+    apply. Comments, order and
     translations are kept. None if it isn't a Flatpak app's entry."""
     from gi.repository import GLib  # only here: `launch` shouldn't pay for it
 
@@ -296,8 +321,11 @@ def rewrite(desktop_file):
     if get_string(entry, DESKTOP_ENTRY, "DBusActivatable") is not None:
         entry.set_boolean(DESKTOP_ENTRY, "DBusActivatable", False)
 
-    rename = RENAMES.get(app_id)
-    if rename:
+    names, hidden = menu_tree
+    if app_id in hidden:
+        entry.set_boolean(DESKTOP_ENTRY, "NoDisplay", True)
+    rename = names.get(app_id)
+    if rename and get_string(entry, DESKTOP_ENTRY, "Name") != rename:
         keys, _ = entry.get_keys(DESKTOP_ENTRY)
         for name in keys:
             key, locale = split_key(name)
@@ -315,9 +343,10 @@ def sync_launchers(where):
     source, target = EXPORTS[where], LAUNCHERS[where]
     target.mkdir(parents=True, exist_ok=True)
     wanted = {}
+    menu_tree = read_menu_tree()
     for entry in sorted(source.glob("*.desktop")) if source.is_dir() else []:
         try:
-            content = rewrite(entry)
+            content = rewrite(entry, menu_tree)
         except (OSError, GLib.Error) as err:
             # A dangling export, or an entry that doesn't parse: skip it.
             print(f"quine-app-updates: {entry.name}: {err}", file=sys.stderr)

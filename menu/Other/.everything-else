@@ -1,0 +1,3 @@
+# Every app placed nowhere else in this tree: what users install themselves
+# (Flatpaks from Central Package, packages from DNF Package Store) and
+# anything new in a base image update.

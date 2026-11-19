@@ -192,6 +192,8 @@ desktop-file-edit --set-key=StartupWMClass --set-value=slitherer \
 desktop-file-edit --set-icon=system-software-install \
   /usr/share/applications/liveinst.desktop
 test -e /usr/share/icons/breeze/apps/48/system-software-install.svg
+# The menu tree again, now that the installer's entry exists (it's in System).
+/usr/libexec/quine-linux/build-menu
 
 # Install the pulled image, then point the system at the registry for updates.
 tee -a /usr/share/anaconda/interactive-defaults.ks <<EOF

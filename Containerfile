@@ -193,13 +193,6 @@ RUN set -eux; \
     grep -q '^NAME="Quine Linux"' "$f"; \
     grep -q '^PRETTY_NAME="Quine Linux' "$f"
 
-# Un-owned files baked directly into Aurora's own build, not from an RPM --
-# dnf/rpm can't remove these, so plain rm: Aurora Offline Docs (a webapp
-# shortcut to a local PDF) and Community (a webapp shortcut to the GitHub
-# discussions page).
-RUN rm -f /usr/share/applications/dev.getaurora.offline-docs.desktop \
-          /usr/share/applications/dev.getaurora.discussions.desktop
-
 COPY --from=kmod-builder /output/snd-hda-codec-cs8409.ko /tmp/snd-hda-codec-cs8409.ko
 
 # Installs into .../extra/, which kmod's default search order gives
@@ -239,6 +232,13 @@ COPY --from=admin-auth-builder /out/ /tmp/admin-auth-rpms/
 RUN dnf install -y /tmp/admin-auth-rpms/*.rpm && \
     rpm -q polkit-qt6-1 polkit-kde kio-admin | tee /dev/stderr | grep -c '\.quine\.' | grep -qx 3 && \
     rm -rf /tmp/admin-auth-rpms
+
+# The start menu: the menu tree (menu/, README "The menu tree") becomes
+# Plasma's menu file, and its names and .hidden go into the apps' menu
+# entries. After every step that installs apps, so it sees them all.
+COPY menu/ /usr/share/quine-linux/menu/
+RUN /usr/libexec/quine-linux/build-menu && \
+    grep -q quine-menu- /etc/xdg/menus/plasma-applications.menu
 
 # System-level units are enabled explicitly.
 # quine-update-check.timer: the status Kickoff's update bar shows.
