@@ -123,6 +123,24 @@ becomes a file in a package, or a package trigger.
 - **VM test:** a second VM on zeus (e.g. 108) with the same
   `vm-test.sh` flow, given the KIWI disk image (`oem`) or the ISO.
 
+## Disk space (estimates, before phase 1 measures them)
+
+- **Per build, on a runner, freed afterwards:** about 25–30 GB per
+  architecture. That covers KIWI's root tree (~8–10 GB for KDE with
+  LibreOffice and PIM), the ISO (~3 GB), the raw disk image (~10–12 GB)
+  and dnf's cache (~2–3 GB). The x86 runner has ~125 GB free. The arm64
+  runner's 54 GB root disk is the tight one: KIWI's work directory should
+  go on its 49 GB containers disk.
+- **Plasma rebuilds:** a few GB of build tree, freed after each one.
+- **Kept, in MinIO:** ~6 GB per build per architecture (the ISO, plus the
+  compressed disk image). That's on top of the Home Edition's, so the
+  retention policy decides the total: keeping the last 5 builds of both
+  architectures is ~60 GB.
+- **Kept, in the forge's RPM registry:** under 1 GB per architecture for a
+  few versions of our rebuilt packages.
+- **VM 108 on zeus:** 64 GB thin-provisioned, ~10–15 GB really used.
+  zeus's local-lvm has ~345 GB free.
+
 ## Phases
 
 1. **Build Fedora's own KDE Edition with KIWI on our runner, unchanged.**
@@ -161,7 +179,7 @@ choices should leave the door open.
 - **Apps as RPMs or Flatpaks:** Fedora KDE ships Firefox and LibreOffice
   as RPMs. Keep Fedora's RPMs, or match the Home Edition's Flatpaks
   (Firefox, Falkon, Audacity…)?
-- **Fedora version:** the current stable release (like the image edition's
+- **Fedora version:** the current stable release (like the Home Edition's
   "bleeding edge" packages, which dnf gives anyway), not Rawhide?
 - **One forge RPM group or two:** do the Home Edition's `quine` group and
   the stateful packages share one repository?
