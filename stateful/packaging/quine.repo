@@ -1,10 +1,13 @@
 # Quine Linux's own apps (dnf-package-store, swap-watchdog), from the forge's
 # `quine` RPM group. Forgejo signs the metadata, not the packages, so dnf
-# checks the metadata, which pins each package's checksum.
+# checks the metadata, which pins each package's checksum. The forge is on
+# Quine's tailnet only for now: elsewhere dnf skips this repo instead of
+# failing (skip_if_unavailable).
 [quine]
 name=Quine Linux
 baseurl=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine
 enabled=1
+skip_if_unavailable=True
 gpgcheck=0
 repo_gpgcheck=1
 gpgkey=https://forge.in.quineglobal.com/api/packages/quine-global/rpm/repository.key

@@ -18,19 +18,24 @@
 	<!-- RPMs build-in-container.sh made for this build (quine-linux-release,
 	     quine-linux-desktop, the rebuilt administrator-prompt packages).
 	     Not kept in the image: installed systems get ours from the repos
-	     quine-linux-release configures. QUINE_LOCAL_REPO is replaced with
+	     quine-linux-release configures. build-in-container.sh fills in
 	     its path. -->
 	<repository type="rpm-md" alias="quine-local" priority="1" imageinclude="false" package_gpgcheck="false">
 		<source path="dir://QUINE_LOCAL_REPO"/>
 	</repository>
 	<!-- Our apps (dnf-package-store, swap-watchdog), from the forge's
 	     `quine` RPM group, as the Home Edition's Containerfile installs
-	     them. Forgejo signs the metadata, not the packages. -->
+	     them. Forgejo signs the metadata, not the packages. The forge is
+	     tailnet-only: build-in-container.sh fetches its key when it can
+	     reach it, and otherwise deletes the quine-repo blocks (the repo and
+	     its packages) and says so. -->
+	<!-- quine-repo:begin -->
 	<repository type="rpm-md" alias="quine" imageinclude="false" repository_gpgcheck="true" package_gpgcheck="false">
 		<source path="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/quine">
-			<signing key="https://forge.in.quineglobal.com/api/packages/quine-global/rpm/repository.key"/>
+			<signing key="file://QUINE_REPO_KEY"/>
 		</source>
 	</repository>
+	<!-- quine-repo:end -->
 
 	<!-- Our identity in place of Fedora's KDE one (Fedora's teams/kde.xml
 	     installs fedora-release-kde for its own profiles only):
@@ -44,8 +49,10 @@
 	<packages type="image" patternType="plusRecommended" profiles="Quine-KDE-Desktop-Live,Quine-KDE-Desktop-Disk">
 		<!-- Ours: the Home Edition's overlay, the menu tree, Flatpak setup. -->
 		<package name="quine-linux-desktop"/>
+		<!-- quine-repo:begin -->
 		<package name="dnf-package-store"/>
 		<package name="swap-watchdog"/>
+		<!-- quine-repo:end -->
 		<!-- Administrator prompts that queue (admin-auth/), rebuilt from
 		     Fedora's own source with our patches. -->
 		<package name="polkit-qt6-1"/>
