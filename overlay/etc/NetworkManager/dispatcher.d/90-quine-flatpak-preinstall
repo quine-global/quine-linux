@@ -1,0 +1,10 @@
+#!/usr/bin/sh
+# Installs the preinstalled Flatpak apps whenever the network comes up
+# (README "Preinstalled apps"): quine-flatpak-preinstall.service, which says why.
+case "$2" in
+  up|connectivity-change)
+    [ "$2" = connectivity-change ] && [ "${CONNECTIVITY_STATE:-}" != FULL ] && exit 0
+    systemctl start --no-block quine-flatpak-preinstall.service
+    ;;
+esac
+exit 0

@@ -370,6 +370,22 @@ from Fedora's own source RPM plus one patch):
 If a new version moves the patched code, the build stops and says which patch
 didn't apply.
 
+## Preinstalled apps
+
+The Flatpak apps every install gets (Central Package, Firefox, Audacity,
+Quple, …) are listed in `/usr/share/flatpak/preinstall.d/` (Aurora's) and
+`overlay/etc/flatpak/preinstall.d/quine-linux.preinstall` (ours), and installed by
+`flatpak preinstall`. Aurora's `flatpak-preinstall.service` runs it once at
+boot. On a Wi-Fi desktop that's before there's a network: every lookup fails
+quietly, it ends with "Nothing to do", and the new system has no apps (a
+desktop installed 2026-11-20). So NetworkManager's dispatcher
+(`overlay/etc/NetworkManager/dispatcher.d/90-quine-flatpak-preinstall`) starts
+`quine-flatpak-preinstall.service`, the same command, whenever a connection
+comes up. Once everything's in it does nothing, and it never reinstalls an
+app someone removed (Flatpak marks those as already preinstalled).
+
+By hand: `sudo flatpak preinstall -y`.
+
 ## App updates on launch
 
 (Where every Quine app is published and how each updates:

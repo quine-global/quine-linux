@@ -1,0 +1,15 @@
+# Installs the preinstalled Flatpak apps that aren't in yet (README
+# "Preinstalled apps"). Started by NetworkManager's dispatcher whenever the
+# network comes up (/etc/NetworkManager/dispatcher.d/90-quine-flatpak-preinstall):
+# Aurora's flatpak-preinstall.service runs once at boot, and on a Wi-Fi desktop
+# that's before there's a network, so it finds nothing and says "Nothing to
+# do". Repeating it is harmless: with everything in it does nothing, and it
+# never reinstalls an app someone removed (Flatpak marks those preinstalled).
+[Unit]
+Description=Install the preinstalled Flatpak apps that aren't in yet
+ConditionPathExists=/usr/bin/flatpak
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flatpak preinstall -y --noninteractive
