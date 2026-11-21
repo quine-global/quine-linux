@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+"""Adds Quine Linux's signing rule to /etc/containers/policy.json (README
+"Signed images"), keeping the base image's own rules: images from the name
+installed systems update from must carry a GPG signature by the "Quine Global
+Packages" key. The Containerfile runs it at build time."""
+import json
+
+PATH = "/etc/containers/policy.json"
+policy = json.load(open(PATH))
+policy.setdefault("transports", {}).setdefault("docker", {})["registry.quineglobal.com/quine-linux"] = [{
+    "type": "signedBy",
+    "keyType": "GPGKeys",
+    "keyPath": "/etc/pki/containers/quine-linux.gpg",
+    # Any tag: latest, latest-arm64, a date or commit tag.
+    "signedIdentity": {"type": "matchRepository"},
+}]
+with open(PATH, "w") as f:
+    json.dump(policy, f, indent=4)
+    f.write("\n")
+print(json.dumps(policy["transports"]["docker"], indent=2))

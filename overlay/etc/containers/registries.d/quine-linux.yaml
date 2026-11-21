@@ -1,0 +1,5 @@
+# Where Quine Linux images' GPG signatures are (README "Signed images"):
+# one file per image digest, written by iso.yml, public on MinIO.
+docker:
+  registry.quineglobal.com/quine-linux:
+    lookaside: https://s3.quineglobal.com/quine-linux/sigstore

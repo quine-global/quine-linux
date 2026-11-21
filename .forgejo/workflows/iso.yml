@@ -195,6 +195,40 @@ jobs:
             podman push --retry 5 "$IMAGE:$t$SUFFIX"
           done
 
+      - name: Sign the image
+        # Installed systems check each update's GPG signature (README "Signed
+        # images"): by the "Quine Global Packages" key, as a "lookaside" file
+        # per image digest on MinIO (public: sigstore/), which
+        # overlay/etc/containers/registries.d/quine-linux.yaml points them at.
+        # Secrets: IMAGE_SIGNING_KEY (the key, armored), and
+        # IMAGE_SIGNING_PASSPHRASE if it has one (petersweb-infra
+        # docs/TOKENS.md).
+        env:
+          SUFFIX: ${{ matrix.tag-suffix }}
+          IMAGE_SIGNING_KEY: ${{ secrets.IMAGE_SIGNING_KEY }}
+          IMAGE_SIGNING_PASSPHRASE: ${{ secrets.IMAGE_SIGNING_PASSPHRASE }}
+          RCLONE_CONFIG_STORE_ACCESS_KEY_ID: ${{ vars.MINIO_ACCESS_KEY || secrets.MINIO_ACCESS_KEY }}
+          RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          : "${IMAGE_SIGNING_KEY:?IMAGE_SIGNING_KEY secret not set}"
+          export GNUPGHOME=$(mktemp -d); work=$(mktemp -d)
+          trap 'rm -rf "$GNUPGHOME" "$work"' EXIT
+          printf '%s\n' "$IMAGE_SIGNING_KEY" | gpg --batch --quiet --import
+          fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1 == "fpr" {print $10; exit}')
+          public="${UPDATE_IMAGE%:*}"
+          skopeo --registries-conf /dev/null inspect --raw "docker://$IMAGE:${GITHUB_SHA::12}$SUFFIX" >"$work/manifest.json"
+          digest="sha256:$(sha256sum "$work/manifest.json" | cut -d' ' -f1)"
+          pass=()
+          if [ -n "${IMAGE_SIGNING_PASSPHRASE:-}" ]; then
+            printf '%s' "$IMAGE_SIGNING_PASSPHRASE" >"$work/passphrase"
+            pass=(--passphrase-file "$work/passphrase")
+          fi
+          skopeo standalone-sign "${pass[@]}" -o "$work/signature-1" "$work/manifest.json" "$public:latest$SUFFIX" "$fpr"
+          skopeo standalone-verify "$work/manifest.json" "$public:latest$SUFFIX" "$fpr" "$work/signature-1"
+          rclone copyto "$work/signature-1" "store:${MINIO_BUCKET}/sigstore/quine-linux@${digest/:/=}/signature-1"
+          echo "signed $digest with $fpr"
+
       - name: Check the public name serves this image
         # Installed systems update from UPDATE_IMAGE's name
         # (registry.quineglobal.com, a proxy on mainframe, petersweb-infra
@@ -217,6 +251,10 @@ jobs:
           echo "pushed $IMAGE:$tag = $pushed"
           echo "public $public:$tag = $served"
           [ "$served" = "$pushed" ] || { echo "::error::$public doesn't serve what was pushed: installed systems won't get this build (petersweb-infra edge.nix, registry.quineglobal.com)"; exit 1; }
+          # And its signature, where installed systems look for it.
+          sig="https://s3.quineglobal.com/quine-linux/sigstore/quine-linux@${pushed/:/=}/signature-1"
+          curl -fsS -o /dev/null "$sig" || { echo "::error::no signature at $sig: installed systems will refuse this build"; exit 1; }
+          echo "signature $sig"
 
       - name: Build disk image
         run: .forgejo/retry-on-network-error.sh task build-disk-image CONTAINER_RUNTIME=podman BASE_IMAGE="$BASE_IMAGE" UPDATE_IMAGE="$UPDATE_IMAGE" $ARCH_VARS

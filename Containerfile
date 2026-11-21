@@ -253,6 +253,15 @@ RUN dnf install -y /tmp/admin-auth-rpms/*.rpm && \
     rpm -q polkit-qt6-1 polkit-kde kio-admin | tee /dev/stderr | grep -c '\.quine\.' | grep -qx 3 && \
     rm -rf /tmp/admin-auth-rpms
 
+# Updates are signed (README "Signed images"): images from the name installed
+# systems update from must carry a GPG signature by the "Quine Global
+# Packages" key (overlay/etc/pki/containers/quine-linux.gpg), found where
+# overlay/etc/containers/registries.d/quine-linux.yaml says. Added to the
+# base image's policy rather than replacing it
+# (overlay/usr/libexec/quine-linux/add-image-signing-policy).
+RUN /usr/libexec/quine-linux/add-image-signing-policy && \
+    grep -q '"registry.quineglobal.com/quine-linux"' /etc/containers/policy.json
+
 # The start menu: the menu tree (menu/, README "The menu tree") becomes
 # Plasma's menu file, and its names and .hidden go into the apps' menu
 # entries. After every step that installs apps, so it sees them all.

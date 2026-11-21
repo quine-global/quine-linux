@@ -389,6 +389,33 @@ from Fedora's own source RPM plus one patch):
 If a new version moves the patched code, the build stops and says which patch
 didn't apply.
 
+## Signed images
+
+Images are signed with GPG, by the **"Quine Global Packages"** key, the same
+key that signs our dnf and apt repos (`06249465F4C6A0A851211266772797169CE1D647`,
+public at `overlay/etc/pki/containers/quine-linux.gpg` and
+packages.quineglobal.com/quine-packages.asc).
+
+- **CI** (`iso.yml`, "Sign the image"): after each push, `skopeo
+  standalone-sign` signs the image's manifest digest and uploads the signature
+  to MinIO's public `sigstore/` (one file per digest, `quine-linux@sha256=<hex>/
+  signature-1`). The next step checks it's served, and fails the build if
+  not. Secrets: `IMAGE_SIGNING_KEY` (armored) and `IMAGE_SIGNING_PASSPHRASE`.
+- **The image**: `/etc/containers/policy.json` requires that signature for
+  `registry.quineglobal.com/quine-linux`
+  (`overlay/usr/libexec/quine-linux/add-image-signing-policy`), and
+  `/etc/containers/registries.d/quine-linux.yaml` says where signatures are.
+- **Which installs check it**: those whose deployment follows
+  `ostree-image-signed:…`, which is what the disk image sets up. The live
+  ISO's installs follow `ostree-unverified-registry:…` (no check);
+  `sudo bootc switch --enforce-container-sigpolicy
+  registry.quineglobal.com/quine-linux:latest` turns checking on for one.
+- **Before signing existed** (until 2026-11-21) a disk-image install couldn't
+  update at all: it demanded a signature nobody made. Such a machine needs,
+  once, `sudo bootc switch registry.quineglobal.com/quine-linux:latest`
+  (unverified), and after updating to a signed image, optionally the
+  `--enforce-container-sigpolicy` switch above.
+
 ## Preinstalled apps
 
 The Flatpak apps every install gets (Central Package, Firefox, Audacity,
