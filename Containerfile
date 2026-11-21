@@ -174,8 +174,11 @@ RUN /usr/lib/quine-linux/python/bin/python3 -c \
 # Native RPMs: plasma-welcome (Welcome Center), Sunshine (game-stream host),
 # KDE Connect (phone pairing: notifications, files and clipboard between a
 # phone and the computer; kde-connect, its daemon and libs, which nothing
-# else needs).
-RUN dnf remove -y plasma-welcome Sunshine kde-connect kdeconnectd kde-connect-libs
+# else needs), KDebugSettings (turns Qt debug-log categories on and off; a
+# developer tool), KWalletManager (browses the wallet's saved passwords; the
+# wallet itself, kwalletd, stays, and so do the apps that use it).
+RUN dnf remove -y plasma-welcome Sunshine kde-connect kdeconnectd kde-connect-libs \
+      kdebugsettings kwalletmanager5
 
 # Falkon on the taskbar: pinned after the browser in Aurora's panel layout
 # (both of its look-and-feel themes), for new users. Users who already have

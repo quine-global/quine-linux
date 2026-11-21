@@ -2,3 +2,13 @@
 # file ID per line. They still open files ("Open With") and run by command.
 dev.getaurora.offline-docs
 dev.getaurora.discussions
+# alsa-tools' setup GUIs for particular sound cards (RME Hammerfall, Echo,
+# ICE1712/Envy24 cards, HD-audio pin retasking). The package stays for
+# hda-verb (cs8409-intmike-power-fixup.service); its GUIs don't belong in
+# a stock menu.
+echomixer
+envy24control
+hdajackretask
+hdspconf
+hdspmixer
+hwmixvolume
