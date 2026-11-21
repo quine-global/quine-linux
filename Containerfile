@@ -220,8 +220,10 @@ RUN set -eux; \
     mkdir -p "/usr/lib/modules/${NVR}/extra"; \
     mv /tmp/snd-hda-codec-cs8409.ko "/usr/lib/modules/${NVR}/extra/snd-hda-codec-cs8409.ko"; \
     depmod -a "${NVR}"; \
-    modinfo -k "${NVR}" -n snd-hda-codec-cs8409 | tee /dev/stderr \
-      | grep -qx "/usr/lib/modules/${NVR}/extra/snd-hda-codec-cs8409.ko"
+    # modinfo reports /lib/modules/... (/lib is a symlink to usr/lib), so
+    # compare resolved paths.
+    test "$(realpath "$(modinfo -k "${NVR}" -n snd-hda-codec-cs8409)")" \
+      = "/usr/lib/modules/${NVR}/extra/snd-hda-codec-cs8409.ko"
 
 # Our own apps, from the forge's `quine` RPM group: each repo's rpm.yml
 # builds and uploads them (quine-global/layer-wizard, dnf-package-store,
