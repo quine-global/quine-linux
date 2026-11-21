@@ -400,7 +400,7 @@ packages.quineglobal.com/quine-packages.asc).
   standalone-sign` signs the image's manifest digest and uploads the signature
   to MinIO's public `sigstore/` (one file per digest, `quine-linux@sha256=<hex>/
   signature-1`). The next step checks it's served, and fails the build if
-  not. Secrets: `IMAGE_SIGNING_KEY_B64` (the armored key, `base64 -w0`) and `IMAGE_SIGNING_PASSPHRASE`.
+  not. Secrets: `IMAGE_SIGNING_KEY` (armored; job-level env only, never a step's: iso.yml says why) and `IMAGE_SIGNING_PASSPHRASE`.
 - **The image**: `/etc/containers/policy.json` requires that signature for
   `registry.quineglobal.com/quine-linux`
   (`overlay/usr/libexec/quine-linux/add-image-signing-policy`), and

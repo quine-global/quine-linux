@@ -91,6 +91,13 @@ jobs:
       UPDATE_IMAGE: registry.quineglobal.com/quine-linux:latest${{ matrix.tag-suffix }}
       # The tasks' architecture settings (Taskfile.yml).
       ARCH_VARS: PLATFORM=${{ matrix.platform }} TARGET_ARCH=${{ matrix.arch }}
+      # "Sign the image"'s key, here and not in that step's env: the runner
+      # (act_runner 1.0.3, printStepEnvBlock) prints each step's own env:
+      # values in its log, and this multi-line secret slipped past the
+      # masking, so the key printed in the clear in five runs (2026-11-21).
+      # Job-level env is never printed. Never move it back to a step, and
+      # don't print the environment (env, printenv, set -x) in this job.
+      IMAGE_SIGNING_KEY: ${{ secrets.IMAGE_SIGNING_KEY }}
     steps:
       # No submodules: stage 0 (Aurora) comes from the registry now. Our pull
       # mirror of code.forgejo.org/actions/checkout.
@@ -200,23 +207,23 @@ jobs:
         # images"): by the "Quine Global Packages" key, as a "lookaside" file
         # per image digest on MinIO (public: sigstore/), which
         # overlay/etc/containers/registries.d/quine-linux.yaml points them at.
-        # Secrets: IMAGE_SIGNING_KEY_B64 (the armored key, base64 on one
-        # line), and IMAGE_SIGNING_PASSPHRASE if it has one (petersweb-infra
+        # Secrets: IMAGE_SIGNING_KEY (the key, armored; in the job's env, see
+        # there), and IMAGE_SIGNING_PASSPHRASE if it has one (petersweb-infra
         # docs/TOKENS.md).
-        #
-        # One line, because the runner prints each step's env with newlines
-        # as "\n", which no longer matches a multi-line secret, so it isn't
-        # masked: the armored IMAGE_SIGNING_KEY printed in the clear in five
-        # runs on 2026-11-21. Never put a multi-line secret in env.
         env:
           SUFFIX: ${{ matrix.tag-suffix }}
-          IMAGE_SIGNING_KEY_B64: ${{ secrets.IMAGE_SIGNING_KEY_B64 }}
           IMAGE_SIGNING_PASSPHRASE: ${{ secrets.IMAGE_SIGNING_PASSPHRASE }}
           RCLONE_CONFIG_STORE_ACCESS_KEY_ID: ${{ vars.MINIO_ACCESS_KEY || secrets.MINIO_ACCESS_KEY }}
           RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
         run: |
           set -euo pipefail
-          : "${IMAGE_SIGNING_KEY_B64:?IMAGE_SIGNING_KEY_B64 secret not set (base64 -w0 of the armored key)}"
+          : "${IMAGE_SIGNING_KEY:?IMAGE_SIGNING_KEY secret not set}"
+          # Masking matches a secret's whole value within one log line, so
+          # a multi-line key printed line by line would slip through: mask
+          # each line of it too (each ::add-mask:: line logs as "***").
+          while IFS= read -r line; do
+            [ "${#line}" -lt 16 ] || printf '::add-mask::%s\n' "$line"
+          done <<<"$IMAGE_SIGNING_KEY"
           # gpg (skopeo signs through it): the runners' own once they have it
           # (petersweb-infra forgejo-runner.nix), Nix's until then (by its full path:
           # the job's PATH has the runner's tools only, not the system's).
@@ -227,7 +234,7 @@ jobs:
           gpg --version | head -1
           export GNUPGHOME=$(mktemp -d); work=$(mktemp -d)
           trap 'rm -rf "$GNUPGHOME" "$work"' EXIT
-          printf '%s' "$IMAGE_SIGNING_KEY_B64" | base64 -d | gpg --batch --quiet --import
+          printf '%s\n' "$IMAGE_SIGNING_KEY" | gpg --batch --quiet --import
           fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1 == "fpr" {print $10; exit}')
           public="${UPDATE_IMAGE%:*}"
           skopeo --registries-conf /dev/null inspect --raw "docker://$IMAGE:${GITHUB_SHA::12}$SUFFIX" >"$work/manifest.json"
