@@ -212,6 +212,11 @@ jobs:
         run: |
           set -euo pipefail
           : "${IMAGE_SIGNING_KEY:?IMAGE_SIGNING_KEY secret not set}"
+          # gpg (skopeo signs through it): the runners' own once they have it
+          # (petersweb-infra forgejo-runner.nix), Nix's until then.
+          command -v gpg >/dev/null ||
+            export PATH="$(nix --extra-experimental-features 'nix-command flakes' build --no-link --print-out-paths nixpkgs#gnupg)/bin:$PATH"
+          gpg --version | head -1
           export GNUPGHOME=$(mktemp -d); work=$(mktemp -d)
           trap 'rm -rf "$GNUPGHOME" "$work"' EXIT
           printf '%s\n' "$IMAGE_SIGNING_KEY" | gpg --batch --quiet --import
