@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Id": "quine-force-quit-monitor",
+        "Name": "Force Quit Monitor: hidden while minimized",
+        "Description": "Keeps the always-running Force Quit Monitor out of the taskbar, the task switcher and the pager while it's minimized",
+        "EnabledByDefault": true,
+        "License": "GPL-2.0-or-later",
+        "Version": "1.0"
+    },
+    "X-Plasma-API": "javascript"
+}

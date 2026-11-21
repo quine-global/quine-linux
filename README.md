@@ -216,6 +216,25 @@ preinstalled (`overlay/etc/flatpak/preinstall.d/quine-linux.preinstall`).
 KWin defaults for every user. The top-left hot corner that opens Overview
 is off (`[Effect-overview] BorderActivate=9`). A user's own
 `~/.config/kwinrc`, which System Settings writes, still overrides it.
+It also turns on the Force Quit Monitor script (below).
+
+### Force Quit Monitor
+
+Force Quit Monitor (`force-quit-gui`, from swap-watchdog) runs from login
+and stays minimized, so swap-watchdog can show it when memory runs out
+without starting anything. A KWin script
+(`overlay/usr/share/kwin/scripts/quine-force-quit-monitor`) keeps it out of
+the taskbar, Alt+Tab and the pager while it's minimized, and puts it back
+when it's shown. KWin has to do this because a Wayland app can't ask for it
+itself.
+
+### The taskbar's pinned apps
+
+Falkon is pinned after the browser. For new users, the Containerfile adds it
+to Aurora's panel layout. Users who already have a panel get it once from a
+Plasma update script
+(`overlay/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/91-quine-pin-falkon.js`),
+so if they unpin it, it stays unpinned.
 
 ### Graceful updates: `update-confirm`, `update-rollback`, `update-skip-rejected`, `update-failed`
 

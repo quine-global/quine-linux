@@ -177,6 +177,17 @@ RUN /usr/lib/quine-linux/python/bin/python3 -c \
 # else needs).
 RUN dnf remove -y plasma-welcome Sunshine kde-connect kdeconnectd kde-connect-libs
 
+# Falkon on the taskbar: pinned after the browser in Aurora's panel layout
+# (both of its look-and-feel themes), for new users. Users who already have
+# a panel get it from a Plasma update script
+# (overlay/usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/91-quine-pin-falkon.js).
+RUN set -eux; \
+    for f in /usr/share/plasma/look-and-feel/dev.getaurora.*/contents/layouts/org.kde.plasma.desktop-layout.js; do \
+      grep -q '"preferred://browser",' "$f"; \
+      sed -i 's|^\( *\)"preferred://browser",$|&\n\1"applications:org.kde.falkon.desktop",|' "$f"; \
+      grep -q '"applications:org.kde.falkon.desktop",' "$f"; \
+    done
+
 # Our name, over Aurora's, in os-release: what the installer (its title and
 # "Let's install ... now"), Plasma's About page and fastfetch show, and new
 # installs' default hostname. Aurora's build (18-image-info.sh) wrote these;

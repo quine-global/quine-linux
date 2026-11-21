@@ -7,3 +7,9 @@
 # Screen Edges.
 [Effect-overview]
 BorderActivate=9
+
+# Force Quit Monitor stays out of the taskbar while it's minimized
+# (overlay/usr/share/kwin/scripts/quine-force-quit-monitor; README, "Force
+# Quit Monitor"). Also on by default in its metadata; this keeps it on.
+[Plugins]
+quine-force-quit-monitorEnabled=true
