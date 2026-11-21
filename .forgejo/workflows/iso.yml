@@ -200,27 +200,34 @@ jobs:
         # images"): by the "Quine Global Packages" key, as a "lookaside" file
         # per image digest on MinIO (public: sigstore/), which
         # overlay/etc/containers/registries.d/quine-linux.yaml points them at.
-        # Secrets: IMAGE_SIGNING_KEY (the key, armored), and
-        # IMAGE_SIGNING_PASSPHRASE if it has one (petersweb-infra
+        # Secrets: IMAGE_SIGNING_KEY_B64 (the armored key, base64 on one
+        # line), and IMAGE_SIGNING_PASSPHRASE if it has one (petersweb-infra
         # docs/TOKENS.md).
+        #
+        # One line, because the runner prints each step's env with newlines
+        # as "\n", which no longer matches a multi-line secret, so it isn't
+        # masked: the armored IMAGE_SIGNING_KEY printed in the clear in five
+        # runs on 2026-11-21. Never put a multi-line secret in env.
         env:
           SUFFIX: ${{ matrix.tag-suffix }}
-          IMAGE_SIGNING_KEY: ${{ secrets.IMAGE_SIGNING_KEY }}
+          IMAGE_SIGNING_KEY_B64: ${{ secrets.IMAGE_SIGNING_KEY_B64 }}
           IMAGE_SIGNING_PASSPHRASE: ${{ secrets.IMAGE_SIGNING_PASSPHRASE }}
           RCLONE_CONFIG_STORE_ACCESS_KEY_ID: ${{ vars.MINIO_ACCESS_KEY || secrets.MINIO_ACCESS_KEY }}
           RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
         run: |
           set -euo pipefail
-          : "${IMAGE_SIGNING_KEY:?IMAGE_SIGNING_KEY secret not set}"
+          : "${IMAGE_SIGNING_KEY_B64:?IMAGE_SIGNING_KEY_B64 secret not set (base64 -w0 of the armored key)}"
           # gpg (skopeo signs through it): the runners' own once they have it
           # (petersweb-infra forgejo-runner.nix), Nix's until then (by its full path:
           # the job's PATH has the runner's tools only, not the system's).
+          # gnupg^out: plain nixpkgs#gnupg prints its man output's path too,
+          # and the two lines made one broken PATH entry (2026-11-21).
           command -v gpg >/dev/null ||
-            export PATH="$(/run/current-system/sw/bin/nix --extra-experimental-features 'nix-command flakes' build --no-link --print-out-paths nixpkgs#gnupg)/bin:$PATH"
+            export PATH="$(/run/current-system/sw/bin/nix --extra-experimental-features 'nix-command flakes' build --no-link --print-out-paths 'nixpkgs#gnupg^out')/bin:$PATH"
           gpg --version | head -1
           export GNUPGHOME=$(mktemp -d); work=$(mktemp -d)
           trap 'rm -rf "$GNUPGHOME" "$work"' EXIT
-          printf '%s\n' "$IMAGE_SIGNING_KEY" | gpg --batch --quiet --import
+          printf '%s' "$IMAGE_SIGNING_KEY_B64" | base64 -d | gpg --batch --quiet --import
           fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1 == "fpr" {print $10; exit}')
           public="${UPDATE_IMAGE%:*}"
           skopeo --registries-conf /dev/null inspect --raw "docker://$IMAGE:${GITHUB_SHA::12}$SUFFIX" >"$work/manifest.json"
