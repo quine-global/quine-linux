@@ -209,15 +209,19 @@ RUN set -eux; \
 
 COPY --from=kmod-builder /output/snd-hda-codec-cs8409.ko /tmp/snd-hda-codec-cs8409.ko
 
-# Installs into .../extra/, which kmod's default search order gives
-# precedence over the in-tree copy under .../kernel/... — this is the same
-# mechanism Fedora's own kmod-* subpackages use to override an in-tree
-# module of the same name/modalias. No blacklisting or renaming needed.
+# Installs into .../extra/. That alone doesn't beat the in-tree copy under
+# .../kernel/...: with no depmod config the two rank equally and depmod keeps
+# whichever it reads first, which on the CI builders was the in-tree one
+# (until 2026-11-21 every image shipped Fedora's driver). The overlay's
+# usr/lib/depmod.d/quine-cs8409.conf makes extra/ win; the check below stops
+# the build if it ever doesn't.
 RUN set -eux; \
     NVR="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')"; \
     mkdir -p "/usr/lib/modules/${NVR}/extra"; \
     mv /tmp/snd-hda-codec-cs8409.ko "/usr/lib/modules/${NVR}/extra/snd-hda-codec-cs8409.ko"; \
-    depmod -a "${NVR}"
+    depmod -a "${NVR}"; \
+    modinfo -k "${NVR}" -n snd-hda-codec-cs8409 | tee /dev/stderr \
+      | grep -qx "/usr/lib/modules/${NVR}/extra/snd-hda-codec-cs8409.ko"
 
 # Our own apps, from the forge's `quine` RPM group: each repo's rpm.yml
 # builds and uploads them (quine-global/layer-wizard, dnf-package-store,
