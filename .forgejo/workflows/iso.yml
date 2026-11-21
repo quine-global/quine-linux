@@ -195,6 +195,29 @@ jobs:
             podman push --retry 5 "$IMAGE:$t$SUFFIX"
           done
 
+      - name: Check the public name serves this image
+        # Installed systems update from UPDATE_IMAGE's name
+        # (registry.quineglobal.com, a proxy on mainframe, petersweb-infra
+        # edge.nix), not from IMAGE. Until 2026-11-21 that proxy served an old
+        # copy (quine-global-labs/quine-linux) and every machine was stuck on
+        # 2026-11-13's image while these pushes went fine: so this compares
+        # what the public name serves for this commit's tag with what was
+        # just pushed, and fails the build if they differ.
+        env:
+          SUFFIX: ${{ matrix.tag-suffix }}
+        run: |
+          public="${UPDATE_IMAGE%:*}"
+          tag="${GITHUB_SHA::12}$SUFFIX"
+          digest() { skopeo --registries-conf /dev/null inspect --format '{{.Digest}}' "docker://$1"; }
+          pushed=$(digest "$IMAGE:$tag")
+          for try in 1 2 3 4 5; do
+            served=$(digest "$public:$tag" 2>&1) && [ "$served" = "$pushed" ] && break
+            echo "== try $try: $public:$tag gives '$served', pushed $pushed"; sleep 20
+          done
+          echo "pushed $IMAGE:$tag = $pushed"
+          echo "public $public:$tag = $served"
+          [ "$served" = "$pushed" ] || { echo "::error::$public doesn't serve what was pushed: installed systems won't get this build (petersweb-infra edge.nix, registry.quineglobal.com)"; exit 1; }
+
       - name: Build disk image
         run: .forgejo/retry-on-network-error.sh task build-disk-image CONTAINER_RUNTIME=podman BASE_IMAGE="$BASE_IMAGE" UPDATE_IMAGE="$UPDATE_IMAGE" $ARCH_VARS
 

@@ -91,6 +91,11 @@ other apps. This file is what you'd otherwise rediscover the hard way.
 - **The ISO is UEFI-only** (like Aurora's); VMs need OVMF/"Enable EFI".
 - **Secure Boot:** the installer queues our MOK for enrollment; the next boot
   of anything with shim must find MokManager beside shim, or it loops.
+- **Installed systems update from `registry.quineglobal.com`**, a proxy on
+  mainframe (petersweb-infra `edge.nix`), not from the forge name CI pushes
+  to. If they ever disagree, machines silently stop updating (2026-11-13 to
+  -21: it served a stale copy). `iso.yml`'s "Check the public name serves
+  this image" step fails the build when they differ.
 - **The forge is tailnet-only** (`forge.in.quineglobal.com`, SSH on 2200).
   MinIO's public name resolves to the forge VM directly on the tailnet; off
   it, it goes through mainframe at Hetzner and is much slower.

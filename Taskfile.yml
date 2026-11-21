@@ -62,11 +62,19 @@ tasks:
       # new stamp each hour makes the layer cache redo it.
       UPDATES_STAMP:
         sh: date -u +%Y-%m-%dT%H
+      # Our commit, as the image's revision label: without it the image
+      # carries Aurora's (a quine-global/aurora commit), which looks like ours
+      # and isn't.
+      REVISION:
+        sh: git rev-parse HEAD 2>/dev/null || echo unknown
     cmds:
       - >-
         {{.SUDO}} {{.CONTAINER_RUNTIME}} build --platform {{.PLATFORM}}
         --build-arg BASE_IMAGE={{.BASE_IMAGE}}
         --build-arg UPDATES_STAMP={{.UPDATES_STAMP}}
+        --label org.opencontainers.image.revision={{.REVISION}}
+        --label org.opencontainers.image.source=https://git.quineglobal.com/quine-global/quine-linux
+        --label org.opencontainers.image.title=quine-linux
         -t {{.IMAGE}} -f Containerfile .
     sources:
       - Containerfile
